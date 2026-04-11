@@ -10,8 +10,7 @@ static uint8_t dir_right = 0;
 
 /* ------------------------------------------------------------------ */
 
-static void apply_direction(uint8_t left_dir, uint8_t right_dir)
-{
+static void apply_direction(uint8_t left_dir, uint8_t right_dir) {
     dir_left  = left_dir;
     dir_right = right_dir;
 
@@ -24,16 +23,14 @@ static void apply_direction(uint8_t left_dir, uint8_t right_dir)
 
 /* ------------------------------------------------------------------ */
 
-void motor_init(void)
-{
+void motor_init(void) {
     apply_direction(0, 0);
     current_L = 0; current_R = 0;
     target_L  = 0; target_R  = 0;
     set_speed_motors(0, 0);
 }
 
-void set_speed_motors(uint16_t speed_left, uint16_t speed_right)
-{
+void set_speed_motors(uint16_t speed_left, uint16_t speed_right) {
     if (speed_left  > FTM_PERIOD) speed_left  = FTM_PERIOD;
     if (speed_right > FTM_PERIOD) speed_right = FTM_PERIOD;
     FTM_DRV_UpdatePwmChannel(INST_FLEXTIMER_PWM1, LEFT_MOTOR_PWM,
@@ -42,8 +39,7 @@ void set_speed_motors(uint16_t speed_left, uint16_t speed_right)
                              FTM_PWM_UPDATE_IN_DUTY_CYCLE, speed_right, 0U, true);
 }
 
-void update_motor_ramp(void)
-{
+void update_motor_ramp(void) {
     uint16_t prev_L = current_L;
     uint16_t prev_R = current_R;
 
@@ -67,22 +63,19 @@ void update_motor_ramp(void)
         set_speed_motors(current_L, current_R);
 }
 
-uint8_t motors_stopped(void)
-{
+uint8_t motors_stopped(void) {
     return (current_L == 0 && current_R == 0) ? 1U : 0U;
 }
 
 /* ------------------------------------------------------------------ */
-static void safe_set_direction(uint8_t left_dir, uint8_t right_dir)
-{
+static void safe_set_direction(uint8_t left_dir, uint8_t right_dir) {
     if (dir_left == left_dir && dir_right == right_dir && motors_stopped())
         return;
 
     target_L = 0;
     target_R = 0;
     uint32_t timeout = 500;
-    while (!motors_stopped() && timeout--)
-    {
+    while (!motors_stopped() && timeout--) {
         update_motor_ramp();
         vTaskDelay(pdMS_TO_TICKS(20));
     }
@@ -92,35 +85,30 @@ static void safe_set_direction(uint8_t left_dir, uint8_t right_dir)
 
 /* ------------------------------------------------------------------ */
 
-void move_forward(void)
-{
+void move_forward(void) {
     safe_set_direction(0, 0);
     target_L = MAX_SPEED;
     target_R = MAX_SPEED;
 }
 
-void move_backward(void)
-{
+void move_backward(void) {
     safe_set_direction(1, 1);
     target_L = MAX_SPEED;
     target_R = MAX_SPEED;
 }
 
-void stop_robot(void)
-{
+void stop_robot(void) {
     target_L = 0;
     target_R = 0;
 }
 
-void turn_left(void)
-{
+void turn_left(void) {
     safe_set_direction(0, 0);
     target_L = 0;
     target_R = TURN_SPEED;
 }
 
-void turn_right(void)
-{
+void turn_right(void) {
     safe_set_direction(0, 0);
     target_L = TURN_SPEED;
     target_R = 0;
