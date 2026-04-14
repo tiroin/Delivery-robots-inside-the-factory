@@ -112,8 +112,7 @@ void task_can_tx(void *pvParameters) {
     }
 }
 
-int main(void)
-{
+int main(void) {
   /*** Processor Expert internal initialization. DON'T REMOVE THIS CODE!!! ***/
   #ifdef PEX_RTOS_INIT
     PEX_RTOS_INIT();                   /* Initialization of the selected RTOS. Macro is defined by the RTOS component. */

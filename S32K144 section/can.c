@@ -6,12 +6,15 @@
 flexcan_state_t  canState;
 flexcan_msgbuff_t rxData;
 
+// Emergency flag:
+uint16_t emergency_flag = 0;
+
 // Initiate CAN configurations:
 void can_init(void) {
     FLEXCAN_DRV_Init(INST_CAN, &canState, &canCom1_InitConfig0);
 }
 
-// Send data:0
+// Send data:
 void can_send_text(const char* str) {
 	// Configure transmitting data format:
     flexcan_data_info_t dataInfo = {
@@ -40,7 +43,7 @@ void can_start_receiving(void) {
         .is_remote   = false
     };
     // Configure RX:
-    FLEXCAN_DRV_ConfigRxMb(INST_CAN, 1U, &rxInfo, 0x123U);
+    FLEXCAN_DRV_ConfigRxMb(INST_CAN, 1U, &rxInfo, 0x111U);
     // Receive data:
     FLEXCAN_DRV_Receive(INST_CAN, 1U, &rxData);
 }
@@ -52,4 +55,21 @@ uint8_t can_is_received(void) {
         return 1U;
     }
     return 0U;
+}
+
+// Process logic:
+uint8_t can_process_logic(void) {
+	// Received emergency flag:
+    if (FLEXCAN_DRV_GetTransferStatus(INST_CAN, 1U) == STATUS_SUCCESS) {
+    	// If it receives the emergency message:
+        if (rxData.msgId == CAN_ID_EMERGENCY) {
+        	// Flag = 1:
+            emergency_flag = 1;
+            return 2;
+        }
+        // Start receiving:
+        can_start_receiving();
+        return 1;
+    }
+    return 0;
 }
