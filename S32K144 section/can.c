@@ -1,6 +1,13 @@
-// Include necessary libraries:
+// ----------------------------------------------------
+// NECESSARY LIBRARIES:
+// ----------------------------------------------------
+
 #include "can.h"
 #include <string.h>
+
+// ----------------------------------------------------
+// PARAMETERS:
+// ----------------------------------------------------
 
 // States:
 flexcan_state_t  canState;
@@ -8,6 +15,10 @@ flexcan_msgbuff_t rxData;
 
 // Emergency flag:
 uint16_t emergency_flag = 0;
+
+// ----------------------------------------------------
+// SUPPORTED FUNCTIONS:
+// ----------------------------------------------------
 
 // Initiate CAN configurations:
 void can_init(void) {
@@ -48,7 +59,7 @@ void can_start_receiving(void) {
     FLEXCAN_DRV_Receive(INST_CAN, 1U, &rxData);
 }
 
-// Received or not:
+// Received or not logic:
 uint8_t can_is_received(void) {
     // Polling transfer status:
     if (FLEXCAN_DRV_GetTransferStatus(INST_CAN, 1U) != STATUS_BUSY) {

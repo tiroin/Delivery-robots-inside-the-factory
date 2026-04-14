@@ -119,8 +119,9 @@ int main(void) {
   #endif
   /*** End of Processor Expert internal initialization.                    ***/
 
-    // System initiation:
+    // System initiation and quick startup:
     sys_init();
+    S32K144EVB_startup();
 
     // Create tasks:
     xTaskCreate(task_can_rx,       "CAN_RX", 256, NULL, 2, &Task_CAN_Rx);
