@@ -10,8 +10,11 @@
 // ----------------------------------------------------
 
 // States:
-flexcan_state_t  canState;
-flexcan_msgbuff_t rxData;
+flexcan_state_t  	canState;
+
+// Message buffer:
+flexcan_msgbuff_t 	rxData_control;
+flexcan_msgbuff_t 	rxData_emergency;
 
 // Emergency flag:
 uint16_t emergency_flag = 0;
@@ -23,6 +26,7 @@ uint16_t emergency_flag = 0;
 // Initiate CAN configurations:
 void can_init(void) {
     FLEXCAN_DRV_Init(INST_CAN, &canState, &canCom1_InitConfig0);
+    FLEXCAN_DRV_SetRxMaskType(INST_CAN, FLEXCAN_RX_MASK_INDIVIDUAL);
 }
 
 // Send data:
@@ -39,7 +43,7 @@ void can_send_text(const char* str) {
     // Send this data to another node:
     uint8_t payload[8] = {0};
     strncpy((char*)payload, str, 8);
-    FLEXCAN_DRV_Send(INST_CAN, 0U, &dataInfo, 0x111U, payload);
+    FLEXCAN_DRV_Send(INST_CAN, 0U, &dataInfo, CAN_ID_CONTROL, payload);
 }
 
 // Receive data:
@@ -53,34 +57,24 @@ void can_start_receiving(void) {
         .fd_padding  = 0U,
         .is_remote   = false
     };
-    // Configure RX:
-    FLEXCAN_DRV_ConfigRxMb(INST_CAN, 1U, &rxInfo, 0x111U);
-    // Receive data:
-    FLEXCAN_DRV_Receive(INST_CAN, 1U, &rxData);
+
+	// MB1: ID 0x111 (control message), Mask: 0x7FF = exact match (11-bit standard ID):
+	FLEXCAN_DRV_SetRxIndividualMask(INST_CAN, FLEXCAN_MSG_ID_STD, MB_RX_CONTROL, 0x7FFU);
+	FLEXCAN_DRV_ConfigRxMb(INST_CAN, MB_RX_CONTROL, &rxInfo, CAN_ID_CONTROL);
+	FLEXCAN_DRV_Receive(INST_CAN, MB_RX_CONTROL, &rxData_control);
+
+	// MB2: ID 0x001 (emergency message)
+	FLEXCAN_DRV_SetRxIndividualMask(INST_CAN, FLEXCAN_MSG_ID_STD, MB_RX_EMERGENCY, 0x7FFU);
+	FLEXCAN_DRV_ConfigRxMb(INST_CAN, MB_RX_EMERGENCY, &rxInfo, CAN_ID_EMERGENCY);
+	FLEXCAN_DRV_Receive(INST_CAN, MB_RX_EMERGENCY, &rxData_emergency);
 }
 
-// Received or not logic:
-uint8_t can_is_received(void) {
-    // Polling transfer status:
-    if (FLEXCAN_DRV_GetTransferStatus(INST_CAN, 1U) != STATUS_BUSY) {
-        return 1U;
-    }
-    return 0U;
+// Received message logic (MB1):
+uint8_t can_control_received(void) {
+    return (FLEXCAN_DRV_GetTransferStatus(INST_CAN, MB_RX_CONTROL) != STATUS_BUSY) ? 1U : 0U;
 }
 
-// Process logic:
-uint8_t can_process_logic(void) {
-	// Received emergency flag:
-    if (FLEXCAN_DRV_GetTransferStatus(INST_CAN, 1U) == STATUS_SUCCESS) {
-    	// If it receives the emergency message:
-        if (rxData.msgId == CAN_ID_EMERGENCY) {
-        	// Flag = 1:
-            emergency_flag = 1;
-            return 2;
-        }
-        // Start receiving:
-        can_start_receiving();
-        return 1;
-    }
-    return 0;
+// Received message logic (MB2):
+uint8_t can_emergency_received(void) {
+    return (FLEXCAN_DRV_GetTransferStatus(INST_CAN, MB_RX_EMERGENCY) != STATUS_BUSY) ? 1U : 0U;
 }
