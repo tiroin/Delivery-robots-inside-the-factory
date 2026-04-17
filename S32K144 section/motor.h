@@ -1,7 +1,9 @@
 #ifndef MOTOR_H_
 #define MOTOR_H_
 
-// Include libraries:
+// ----------------------------------------------------
+// NECESSARY LIBRARIES:
+// ----------------------------------------------------
 #include "Cpu.h"
 #include "FreeRTOS.h"
 #include "pin_mux.h"
@@ -11,6 +13,10 @@
 #include <stdio.h>
 #include <string.h>
 #include "lpuart1.h"
+
+// ----------------------------------------------------
+// PARAMETERS:
+// ----------------------------------------------------
 
 // Define both PWM channel indices for 2 motors:
 #define LEFT_MOTOR_PWM      1U
@@ -37,10 +43,18 @@ extern uint16_t current_R;
 #define RIGHT_DIR_PORT      PTD
 #define RIGHT_DIR_PIN       10U
 
+// Steps:
+#define STEPS_FORWARD   250
+#define STEPS_TURN      150
+#define STEPS_BACKWARD  200
+
+// ----------------------------------------------------
+// SUPPORTED FUNCTIONS:
+// ----------------------------------------------------
+
 void set_speed_motors(uint16_t speed_left, uint16_t speed_right);
 void update_motor_ramp(void);
 uint8_t motors_stopped(void);
-
 void motor_init(void);
 void move_forward(void);
 void move_backward(void);
