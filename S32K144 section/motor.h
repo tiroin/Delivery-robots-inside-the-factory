@@ -29,10 +29,10 @@ extern uint16_t current_L;
 extern uint16_t current_R;
 
 #define FTM_PERIOD          20000U
-#define MAX_SPEED           16000U
-#define TURN_SPEED          10000U
-#define RAMP_STEP           160U
-#define MIN_RUNNING_SPEED   500U
+#define MAX_SPEED           2000U
+#define TURN_SPEED          1500U
+#define RAMP_STEP           40U
+#define MIN_RUNNING_SPEED   1000U
 
 #define RAMP_DOWN_STEPS      ((MAX_SPEED  + RAMP_STEP - 1) / RAMP_STEP)
 #define RAMP_DOWN_STEPS_TURN ((TURN_SPEED + RAMP_STEP - 1) / RAMP_STEP)

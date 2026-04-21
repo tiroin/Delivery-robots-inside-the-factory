@@ -49,12 +49,32 @@ void update_motor_ramp(void) {
     } else if (current_R > target_R) {
         current_R = (current_R <= RAMP_STEP) ? 0 : current_R - RAMP_STEP;
     }
+    // Set speed for both motors:
     set_speed_motors(current_L, current_R);
 }
 
 // Moving according to directions:
-void move_forward(void)  { apply_direction(0, 0); target_L = MAX_SPEED;  target_R = MAX_SPEED; }
-void move_backward(void) { apply_direction(1, 1); target_L = MAX_SPEED;  target_R = MAX_SPEED; }
-void turn_left(void)     { apply_direction(0, 0); target_L = 0;          target_R = TURN_SPEED; }
-void turn_right(void)    { apply_direction(0, 0); target_L = TURN_SPEED; target_R = 0; }
-void stop_robot(void)    { target_L = 0; target_R = 0; }
+void move_forward(void) {
+	apply_direction(0, 0);
+	target_L = MAX_SPEED;
+	target_R = MAX_SPEED;
+}
+void move_backward(void) {
+	apply_direction(1, 1);
+	target_L = MAX_SPEED;
+	target_R = MAX_SPEED;
+}
+void turn_left(void) {
+	apply_direction(0, 0);
+	target_L = 800U;
+	target_R = TURN_SPEED;
+}
+void turn_right(void) {
+	apply_direction(0, 0);
+	target_L = TURN_SPEED;
+	target_R = 800U;
+}
+void stop_robot(void) {
+	target_L = 0;
+	target_R = 0;
+}

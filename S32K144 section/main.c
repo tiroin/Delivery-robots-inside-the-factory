@@ -28,7 +28,6 @@ volatile int exit_code = 0;
 
 TaskHandle_t Task_CAN_Rx, Task_CAN_Tx, Task_Motor;
 QueueHandle_t xMotorCmdQueue;
-
 extern uint16_t target_L, target_R, current_L, current_R;
 
 // ----------------------------------------------------
@@ -103,14 +102,13 @@ void task_motor_handle(void *pvParameters) {
     uint8_t cmd = 0;
     for (;;) {
     	// Inspect commands:
-        if (xQueueReceive(xMotorCmdQueue, &cmd, 0) == pdPASS) {
-            switch(cmd) {
-                case 1: move_forward();  break;
-                case 2: move_backward(); break;
-                case 3: turn_left();     break;
-                case 4: turn_right();    break;
-                case 5: stop_robot();    break;
-            }
+    	xQueueReceive(xMotorCmdQueue, &cmd, 0);
+        switch(cmd) {
+        	case 1: move_forward();  break;
+            case 2: move_backward(); break;
+            case 3: turn_left();     break;
+            case 4: turn_right();    break;
+            case 5: stop_robot();    break;
         }
         // Update speed:
         update_motor_ramp();
@@ -153,14 +151,16 @@ int main(void) {
     // Start scheduling:
     vTaskStartScheduler();
 
-  /*** RTOS startup code. DON'T MODIFY THIS CODE!!! ***/
+  /*** RTOS startup code. Macro PEX_RTOS_START is defined by the RTOS component. DON'T MODIFY THIS CODE!!! ***/
   #ifdef PEX_RTOS_START
-    PEX_RTOS_START();
+    PEX_RTOS_START();                  /* Startup of the selected RTOS. Macro is defined by the RTOS component. */
   #endif
-  /*** End of RTOS startup code. ***/
+  /*** End of RTOS startup code.  ***/
   /*** Processor Expert end of main routine. DON'T MODIFY THIS CODE!!! ***/
-  for (;;) {
-    if (exit_code != 0) break;
+  for(;;) {
+    if(exit_code != 0) {
+      break;
+    }
   }
   return exit_code;
   /*** Processor Expert end of main routine. DON'T WRITE CODE BELOW!!! ***/
