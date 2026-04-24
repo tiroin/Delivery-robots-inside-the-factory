@@ -32,6 +32,9 @@ void sys_init(void) {
 	// Initiate clock configuration:
     CLOCK_DRV_Init(&clockMan1_InitConfig0);
 
+    // Initiate interrupt:
+    INT_SYS_EnableIRQ(PORTD_IRQn);
+
     // Initiate GPIOs:
     PINS_DRV_Init(NUM_OF_CONFIGURED_PINS, g_pin_mux_InitConfigArr);
 

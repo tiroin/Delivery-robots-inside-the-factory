@@ -21,6 +21,7 @@
 // ----------------------------------------------------
 
 volatile int exit_code = 0;
+extern float duty_L_dbg, duty_R_dbg;
 
 // ----------------------------------------------------
 // PARAMETERS:
@@ -34,9 +35,46 @@ extern uint16_t target_L, target_R, current_L, current_R;
 // SUPPORTED FUNCTIONS:
 // ----------------------------------------------------
 
+static void float_to_str(char* buf, float val) {
+    if (val < 0.0f) {
+        *buf++ = '-';
+        val = -val;
+    }
+    uint32_t integer = (uint32_t)val;
+    uint32_t decimal = (uint32_t)((val - (float)integer) * 10.0f + 0.5f);
+    if (decimal >= 10U) { integer++; decimal = 0U; }
+    char tmp[12];
+    int i = 0;
+    if (integer == 0U) {
+        tmp[i++] = '0';
+    } else {
+        uint32_t n = integer;
+        int start = i;
+        while (n > 0U) { tmp[i++] = (char)('0' + (n % 10U)); n /= 10U; }
+        int end = i - 1;
+        while (start < end) {
+            char c = tmp[start]; tmp[start] = tmp[end]; tmp[end] = c;
+            start++; end--;
+        }
+    }
+    tmp[i++] = '.';
+    tmp[i++] = (char)('0' + decimal);
+    tmp[i]   = '\0';
+    int j = 0;
+    while (tmp[j]) { *buf++ = tmp[j++]; }
+    *buf = '\0';
+}
+
 // Print:
 static void uart_log(const char* str) {
     LPUART_DRV_SendDataPolling(INST_LPUART1, (uint8_t*)str, strlen(str));
+}
+
+// ----------------------------------------------------
+// ISR FUNCTION:
+// ----------------------------------------------------
+void PORTD_IRQHandler(void) {
+    Hall_Sensor_Handler();
 }
 
 // ----------------------------------------------------
@@ -46,9 +84,12 @@ static void uart_log(const char* str) {
 // Receiver:
 void task_can_rx(void *pvParameters) {
     (void)pvParameters;
+    // Initiate CAN:
     can_init();
-    uart_log("S32K DUAL-RX MODE: ACTIVE\r\n");
-    const char* cmd_names[] = {"INVALID", "FORWARD", "BACKWARD", "LEFT", "RIGHT", "STOP"};
+
+    // Parameter:
+//    const char* cmd_names[] = {"INVALID", "FORWARD", "BACKWARD", "LEFT", "RIGHT", "STOP"};
+
     // For loop:
     for (;;) {
     	// Inspect emergency message:
@@ -60,11 +101,9 @@ void task_can_rx(void *pvParameters) {
                 emergency_flag = 1;
                 uint8_t stop_cmd = 5;
                 xQueueOverwrite(xMotorCmdQueue, &stop_cmd);
-                uart_log("!!! [RX-EMG] KICH HOAT EMERGENCY !!!\r\n");
             } else {
             	// Release:
                 emergency_flag = 0;
-                uart_log("--- [RX-EMG] GIAI PHONG EMERGENCY ---\r\n");
             }
             // Continue receiving:
             FLEXCAN_DRV_Receive(INST_CAN, MB_RX_EMERGENCY, &rxData_emergency);
@@ -72,20 +111,20 @@ void task_can_rx(void *pvParameters) {
         // Inspect control message:
         if (FLEXCAN_DRV_GetTransferStatus(INST_CAN, MB_RX_CONTROL) == STATUS_SUCCESS) {
             uint8_t cmd = rxData_control.data[0];
-            char log_buf[64];
+//            char log_buf[64];
             // Inspect commands:
             if (cmd >= 1 && cmd <= 5) {
-                sprintf(log_buf, "[RX-CTRL] Command: %s", cmd_names[cmd]);
+//                sprintf(log_buf, "[RX-CTRL] Command: %s", cmd_names[cmd]);
             } else {
-            	sprintf(log_buf, "[RX-CTRL] Command: UNKNOWN (%d)", cmd);
+//            	sprintf(log_buf, "[RX-CTRL] Command: UNKNOWN (%d)", cmd);
             }
-            uart_log(log_buf);
+//            uart_log(log_buf);
             // Inspect if there is any emergency flag:
             if (emergency_flag == 0) {
             	xQueueOverwrite(xMotorCmdQueue, &cmd);
-                uart_log(" -> [ACCEPTED]\r\n");
+//                uart_log(" -> [ACCEPTED]\r\n");
             } else {
-                uart_log(" -> [REJECTED] - System Locked!\r\n");
+//                uart_log(" -> [REJECTED] - System Locked!\r\n");
             }
             FLEXCAN_DRV_Receive(INST_CAN, MB_RX_CONTROL, &rxData_control);
         }
@@ -97,23 +136,54 @@ void task_can_rx(void *pvParameters) {
 // Control section:
 void task_motor_handle(void *pvParameters) {
     (void)pvParameters;
-    // Parameters:
+    // Initiate motor parameters as well as PID:
     motor_init();
+
+    // Parameters:
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    const TickType_t xFrequency = pdMS_TO_TICKS(20);
+
+    char log_buf[128];
+    char str_L[16], str_R[16];
+    uint8_t log_divider = 0;
     uint8_t cmd = 0;
+    uint8_t last_cmd = 0;
+
+    // For loop:
     for (;;) {
     	// Inspect commands:
-    	xQueueReceive(xMotorCmdQueue, &cmd, 0);
-        switch(cmd) {
-        	case 1: move_forward();  break;
-            case 2: move_backward(); break;
-            case 3: turn_left();     break;
-            case 4: turn_right();    break;
-            case 5: stop_robot();    break;
-        }
+    	if (xQueueReceive(xMotorCmdQueue, &cmd, 0) == pdPASS) {
+    		if (cmd != last_cmd) {
+				switch(cmd) {
+					case 1: move_forward();  break;
+					case 2: move_backward(); break;
+					case 3: turn_left();     break;
+					case 4: turn_right();    break;
+					case 5: stop_robot();    break;
+				}
+				last_cmd = cmd;
+    		}
+    	}
+
         // Update speed:
         update_motor_ramp();
+
+        // UART log:
+        if (++log_divider >= 5) {
+            float actual_scaled_L = (actual_L_val / 6.0f) * MAX_SPEED;
+            float actual_scaled_R = (actual_R_val / 6.0f) * MAX_SPEED;
+
+            float_to_str(str_L, actual_scaled_L);
+            float_to_str(str_R, actual_scaled_R);
+
+            sprintf(log_buf, "%u,%s,%u,%s\n", current_L, str_L, current_R, str_R);
+
+            uart_log(log_buf);
+            log_divider = 0;
+        }
+
         // Delay:
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
