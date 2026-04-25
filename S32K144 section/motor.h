@@ -97,9 +97,10 @@ extern float actual_R_val;
 // ----------------------------------------------------
 // DUTY:
 // ----------------------------------------------------
+// Dead zone:
 #define DEADZONE_L 				0.13f
 #define DEADZONE_R 				0.12f
-
+// Duty for clamping:
 #define MAX_DUTY 				1.0f
 #define MIN_DUTY         		0.08f
 
@@ -112,15 +113,26 @@ extern PID_t pid_R;
 // ----------------------------------------------------
 // SUPPORTED FUNCTIONS:
 // ----------------------------------------------------
+
+// Initiate motor parameters:
 void    motor_init       (void);
+// Set motor speed:
 void    set_speed_motors (uint16_t speed_left, uint16_t speed_right);
+// Update motor:
 void    update_motor_ramp(void);
+// Check if motors stop:
 uint8_t motors_stopped   (void);
+// Moving forward:
 void    move_forward     (void);
+// Moving backward:
 void    move_backward    (void);
+// Turning left:
 void    turn_left        (void);
+// Turning right:
 void    turn_right       (void);
+// Stopping robot:
 void    stop_robot       (void);
+// Hall sensor handler:
 void 	Hall_Sensor_Handler(void);
 
 #endif /* MOTOR_H_ */

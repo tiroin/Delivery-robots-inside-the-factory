@@ -17,24 +17,25 @@
 #include <string.h>
 
 // ----------------------------------------------------
-// DEFAULT AND COMPULSORY PARAMETERS:
+// DEFAULT PARAMETER:
 // ----------------------------------------------------
-
 volatile int exit_code = 0;
-extern float duty_L_dbg, duty_R_dbg;
 
 // ----------------------------------------------------
-// PARAMETERS:
+// EXTERNAL PARAMETERS:
 // ----------------------------------------------------
+extern uint16_t target_L, target_R, current_L, current_R;
 
+// ----------------------------------------------------
+// TASK AND QUEUE PARAMETERS:
+// ----------------------------------------------------
 TaskHandle_t Task_CAN_Rx, Task_CAN_Tx, Task_Motor;
 QueueHandle_t xMotorCmdQueue;
-extern uint16_t target_L, target_R, current_L, current_R;
 
 // ----------------------------------------------------
 // SUPPORTED FUNCTIONS:
 // ----------------------------------------------------
-
+// Convert float to string (served for printf or UART log):
 static void float_to_str(char* buf, float val) {
     if (val < 0.0f) {
         *buf++ = '-';
@@ -65,7 +66,7 @@ static void float_to_str(char* buf, float val) {
     *buf = '\0';
 }
 
-// Print:
+// UART log (on PuTTY):
 static void uart_log(const char* str) {
     LPUART_DRV_SendDataPolling(INST_LPUART1, (uint8_t*)str, strlen(str));
 }
@@ -87,11 +88,12 @@ void task_can_rx(void *pvParameters) {
     // Initiate CAN:
     can_init();
 
-    // Parameter:
+    // Command parameter:
 //    const char* cmd_names[] = {"INVALID", "FORWARD", "BACKWARD", "LEFT", "RIGHT", "STOP"};
 
     // For loop:
     for (;;) {
+
     	// Inspect emergency message:
         if (FLEXCAN_DRV_GetTransferStatus(INST_CAN, MB_RX_EMERGENCY) == STATUS_SUCCESS) {
             uint8_t emg_val = rxData_emergency.data[0];
@@ -108,6 +110,7 @@ void task_can_rx(void *pvParameters) {
             // Continue receiving:
             FLEXCAN_DRV_Receive(INST_CAN, MB_RX_EMERGENCY, &rxData_emergency);
         }
+
         // Inspect control message:
         if (FLEXCAN_DRV_GetTransferStatus(INST_CAN, MB_RX_CONTROL) == STATUS_SUCCESS) {
             uint8_t cmd = rxData_control.data[0];
@@ -128,24 +131,30 @@ void task_can_rx(void *pvParameters) {
             }
             FLEXCAN_DRV_Receive(INST_CAN, MB_RX_CONTROL, &rxData_control);
         }
+
         // Delay:
         vTaskDelay(pdMS_TO_TICKS(5));
     }
 }
 
-// Control section:
+// Motor control task:
 void task_motor_handle(void *pvParameters) {
     (void)pvParameters;
     // Initiate motor parameters as well as PID:
     motor_init();
 
-    // Parameters:
+    // Tick/frequency parameters:
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xFrequency = pdMS_TO_TICKS(20);
 
+    // Char parameters:
     char log_buf[128];
     char str_L[16], str_R[16];
+
+    // UART log parameter:
     uint8_t log_divider = 0;
+
+    // Command parameters:
     uint8_t cmd = 0;
     uint8_t last_cmd = 0;
 
@@ -170,14 +179,14 @@ void task_motor_handle(void *pvParameters) {
 
         // UART log:
         if (++log_divider >= 5) {
+        	// Getting the actual value after going through PID and adjustment block:
             float actual_scaled_L = (actual_L_val / 6.0f) * MAX_SPEED_L;
             float actual_scaled_R = (actual_R_val / 6.0f) * MAX_SPEED_R;
-
+            // Convert to string:
             float_to_str(str_L, actual_scaled_L);
             float_to_str(str_R, actual_scaled_R);
-
+            // UART log:
             sprintf(log_buf, "%u,%s,%u,%s\n", current_L, str_L, current_R, str_R);
-
             uart_log(log_buf);
             log_divider = 0;
         }

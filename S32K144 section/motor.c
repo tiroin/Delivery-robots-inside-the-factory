@@ -5,15 +5,23 @@
 // PARAMETERS:
 // ----------------------------------------------------
 
+// Set point:
 uint16_t target_L = 0, target_R = 0;
 uint16_t current_L = 0, current_R = 0;
+
+// Direction:
 static uint8_t dir_left = 0, dir_right = 0;
+
+// Filter:
 static float filtered_L = 0.0f, filtered_R = 0.0f;
+
+// Pulse count:
 volatile uint32_t pulse_count_L = 0;
 volatile uint32_t pulse_count_R = 0;
+
+// Actual values:
 float actual_L_val = 0.0f;
 float actual_R_val = 0.0f;
-float duty_L_dbg = 0.0f, duty_R_dbg = 0.0f;
 
 // PID instances:
 PID_t pid_L, pid_R;
@@ -22,6 +30,7 @@ PID_t pid_L, pid_R;
 // SUPPORTED FUNCTIONS:
 // ----------------------------------------------------
 
+// Apply directions:
 static void apply_direction(uint8_t left_dir, uint8_t right_dir) {
     dir_left = left_dir; dir_right = right_dir;
     if (left_dir)  PINS_DRV_SetPins(LEFT_DIR_PORT, 1U << LEFT_DIR_PIN);
@@ -30,6 +39,7 @@ static void apply_direction(uint8_t left_dir, uint8_t right_dir) {
     else           PINS_DRV_ClearPins(RIGHT_DIR_PORT, 1U << RIGHT_DIR_PIN);
 }
 
+// Initiate motor parameters:
 void motor_init(void) {
     apply_direction(0, 0);
     current_L = 0; current_R = 0;
@@ -40,16 +50,18 @@ void motor_init(void) {
     PID_Init(&pid_R, PID_KP_R, PID_KI_R, PID_KD_R, -1.0f, 1.0f);
 }
 
+// Set motor speed through PWM:
 void set_speed_motors(uint16_t speed_left, uint16_t speed_right) {
     FTM_DRV_UpdatePwmChannel(INST_FLEXTIMER_PWM1, LEFT_MOTOR_PWM,  FTM_PWM_UPDATE_IN_DUTY_CYCLE, speed_left,  0U, true);
     FTM_DRV_UpdatePwmChannel(INST_FLEXTIMER_PWM1, RIGHT_MOTOR_PWM, FTM_PWM_UPDATE_IN_DUTY_CYCLE, speed_right, 0U, true);
 }
 
+// Check if motors stop:
 uint8_t motors_stopped(void) {
     return (current_L == 0U && current_R == 0U) ? 1U : 0U;
 }
 
-// Hall sensor handler:
+// Hall sensor handler (for counting how many pulses):
 void Hall_Sensor_Handler(void) {
     // Interrupt flag:
     uint32_t interruptFlags = PINS_DRV_GetPortIntFlag(PORTD);
@@ -67,10 +79,10 @@ void Hall_Sensor_Handler(void) {
     }
 }
 
+// Update motor:
 void update_motor_ramp(void) {
-    // =========================
-    // 1. RAMP SETPOINT
-    // =========================
+
+    // RAMP SETPOINT:
     // Left motor:
 	if (current_L < target_L)
         current_L = (current_L + RAMP_STEP_L >= target_L) ? target_L : current_L + RAMP_STEP_L;
@@ -82,9 +94,8 @@ void update_motor_ramp(void) {
     else if (current_R > target_R)
         current_R = (current_R <= RAMP_STEP_R) ? 0 : current_R - RAMP_STEP_R;
 
-    // =========================
-    // 2. READ SENSOR (HALL)
-    // =========================
+    // READ SENSOR (HALL):
+
     static uint32_t acc_L = 0, acc_R = 0;
     static uint8_t acc_cnt = 0;
     static float speed_L = 0.0f, speed_R = 0.0f;
@@ -102,6 +113,7 @@ void update_motor_ramp(void) {
     acc_cnt++;
 
     if (acc_cnt >= ACC_WINDOW) {
+    	// FILTERING:
     	float raw_L = ((float)acc_L / ACC_WINDOW) * SPEED_SCALE_L;
     	float raw_R = ((float)acc_R / ACC_WINDOW) * SPEED_SCALE_R;
 
@@ -113,40 +125,31 @@ void update_motor_ramp(void) {
     	actual_L_val = filtered_L;
     	actual_R_val = filtered_R;
 
-        // =========================
-        // 6. FEEDFORWARD (MAIN DRIVER)
-        // =========================
+        // FEEDFORWARD
         float ff_L = 0.0f;
         float ff_R = 0.0f;
         if (current_L > 0) ff_L = DEADZONE_L + (1.0f - DEADZONE_L) * ((float)current_L / MAX_SPEED_L);
         if (current_R > 0) ff_R = DEADZONE_R + (1.0f - DEADZONE_R) * ((float)current_R / MAX_SPEED_R);
 
-        // =========================
-        // 7. PID (ONLY CORRECTION)
-        // =========================
+        // PID
         float pid_L_out = PID_Compute(&pid_L, (float)current_L, speed_L, PID_DT);
         float pid_R_out = PID_Compute(&pid_R, (float)current_R, speed_R, PID_DT);
 
-        // =========================
-        // 8. COMBINE
-        // =========================
+        // COMBINE
         float duty_L = ff_L + pid_L_out;
         float duty_R = ff_R + pid_R_out;
 
-        // =========================
-        // 9. SATURATION + ANTI-WINDUP
-        // =========================
+        // SATURATION + ANTI-WINDUP
+        // Left motor:
         if (duty_L > MAX_DUTY) duty_L = MAX_DUTY;
         if (duty_L < MIN_DUTY && current_L > 0) duty_L = MIN_DUTY;
         if (current_L == 0) duty_L = 0;
-
+        // Right motor:
         if (duty_R > MAX_DUTY) duty_R = MAX_DUTY;
         if (duty_R < MIN_DUTY && current_R > 0) duty_R = MIN_DUTY;
         if (current_R == 0) duty_R = 0;
 
-        // =========================
-        // 10. PWM OUTPUT
-        // =========================
+        // PWM OUTPUT
         uint16_t pwm_L = 0, pwm_R = 0;
         if (duty_L > 0) {
             pwm_L = HANDLE_MIN + (uint16_t)(duty_L * (HANDLE_MAX - HANDLE_MIN));
@@ -154,8 +157,11 @@ void update_motor_ramp(void) {
         if (duty_R > 0) {
             pwm_R = HANDLE_MIN + (uint16_t)(duty_R * (HANDLE_MAX - HANDLE_MIN));
         }
+
+        // SET PWM TO BOTH MOTORS:
         set_speed_motors(pwm_L, pwm_R);
 
+        // RESET:
     	acc_L = acc_R = 0;
     	acc_cnt = 0;
     }
@@ -165,6 +171,7 @@ void update_motor_ramp(void) {
 // MOVEMENT COMMANDS:
 // ----------------------------------------------------
 
+// Moving forward:
 void move_forward(void) {
     apply_direction(0, 0);
     PID_Reset(&pid_L);
@@ -173,6 +180,7 @@ void move_forward(void) {
     target_R = MAX_SPEED_R;
 }
 
+// Moving backward:
 void move_backward(void) {
     apply_direction(1, 1);
     PID_Reset(&pid_L);
@@ -181,6 +189,7 @@ void move_backward(void) {
     target_R = MAX_SPEED_R;
 }
 
+// Turning left:
 void turn_left(void) {
     apply_direction(0, 0);
     PID_Reset(&pid_L);
@@ -189,6 +198,7 @@ void turn_left(void) {
     target_R = TURN_SPEED_R;
 }
 
+// Moving right:
 void turn_right(void) {
     apply_direction(0, 0);
     PID_Reset(&pid_L);
@@ -197,6 +207,7 @@ void turn_right(void) {
     target_R = 0U;
 }
 
+// Stopping robot:
 void stop_robot(void) {
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
