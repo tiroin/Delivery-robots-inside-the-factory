@@ -27,8 +27,8 @@ float PID_Compute(PID_t *pid, float target, float actual, float dt) {
 
     // I (with clamp)
     pid->integral += error * dt;
-    if (pid->integral > 10.0f) pid->integral = 10.0f;
-    if (pid->integral < -10.0f) pid->integral = -10.0f;
+    if (pid->integral > 5.0f) pid->integral = 5.0f;
+    if (pid->integral < -5.0f) pid->integral = -5.0f;
     float I = pid->Ki * pid->integral;
 
     float D = pid->Kd * (error - pid->prev_error) / dt;

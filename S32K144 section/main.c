@@ -170,8 +170,8 @@ void task_motor_handle(void *pvParameters) {
 
         // UART log:
         if (++log_divider >= 5) {
-            float actual_scaled_L = (actual_L_val / 6.0f) * MAX_SPEED;
-            float actual_scaled_R = (actual_R_val / 6.0f) * MAX_SPEED;
+            float actual_scaled_L = (actual_L_val / 6.0f) * MAX_SPEED_L;
+            float actual_scaled_R = (actual_R_val / 6.0f) * MAX_SPEED_R;
 
             float_to_str(str_L, actual_scaled_L);
             float_to_str(str_R, actual_scaled_R);

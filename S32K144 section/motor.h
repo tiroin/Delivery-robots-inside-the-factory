@@ -23,20 +23,42 @@
 #define LEFT_MOTOR_PWM      	1U
 #define RIGHT_MOTOR_PWM     	2U
 
-// Throttle handle voltage: 0.8V -> 2.5V @ V_cc = 3.3V
-// duty = (V / 3.3) * 20000
-#define HANDLE_MIN          	4848U   // 0.8V
-#define HANDLE_MAX          	15152U  // 2.5V
+// Handle threshold:
+#define HANDLE_MIN          	1000U
+#define HANDLE_MAX          	10000U
+
+// Period:
+#define FTM_PERIOD          	20000U
 
 // Motor speed:
-#define FTM_PERIOD          	20000U
-#define MAX_SPEED           	5000U
-#define TURN_SPEED          	5000U
-#define TURN_INNER          	HANDLE_MIN
-#define RAMP_STEP           	500U
-#define MIN_RUNNING_SPEED   	HANDLE_MIN
-#define RAMP_DOWN_STEPS      	((MAX_SPEED  + RAMP_STEP - 1) / RAMP_STEP)
-#define RAMP_DOWN_STEPS_TURN 	((TURN_SPEED + RAMP_STEP - 1) / RAMP_STEP)
+#define MAX_SPEED_L           	1500U
+#define MAX_SPEED_R				1500U
+#define MIN_RUNNING_SPEED   	900U
+
+// Turning speed:
+#define TURN_SPEED_L          	1000U
+#define TURN_SPEED_R          	1000U
+#define TURN_INNER          	900U
+
+// ----------------------------------------------------
+// RAMP:
+// ----------------------------------------------------
+#define RAMP_STEP_L           	500U
+#define RAMP_STEP_R           	500U
+
+#define RAMP_DOWN_STEPS_L     	((MAX_SPEED_L + RAMP_STEP_L - 1) / RAMP_STEP_L)
+#define RAMP_DOWN_STEPS_R     	((MAX_SPEED_R + RAMP_STEP_R - 1) / RAMP_STEP_R)
+
+#define RAMP_DOWN_STEPS_TURN_L 	((TURN_SPEED_L + RAMP_STEP_L - 1) / RAMP_STEP_L)
+#define RAMP_DOWN_STEPS_TURN_R 	((TURN_SPEED_R + RAMP_STEP_L - 1) / RAMP_STEP_R)
+
+// ----------------------------------------------------
+// GAIN:
+// ----------------------------------------------------
+#define FF_GAIN_L 				(1.0f / MAX_SPEED_L)
+#define FF_GAIN_R 				(1.0f / MAX_SPEED_R)
+#define SPEED_SCALE_L 			(1500.0f / 380.0f)
+#define SPEED_SCALE_R 			(1500.0f / 430.0f)
 
 // ----------------------------------------------------
 // DIR PINS:
@@ -55,12 +77,9 @@
 #define RIGHT_HALL_PIN      	2U
 
 // ----------------------------------------------------
-// SCALE FACTOR:
+// WINDOW ACCUMULATION:
 // ----------------------------------------------------
-#define PULSE_PER_PERIOD_L    	5.2f
-#define PULSE_PER_PERIOD_R    	6.0f
-#define ACC_WINDOW			 	4
-#define SPEED_DEADZONE 			0.02f
+#define ACC_WINDOW			 	12
 
 // ----------------------------------------------------
 // EXPOSED VARIABLES:
@@ -74,20 +93,20 @@ extern volatile uint32_t pulse_count_R;
 extern float actual_L_val;
 extern float actual_R_val;
 
-// PID instances:
+// ----------------------------------------------------
+// DUTY:
+// ----------------------------------------------------
+#define DEADZONE_L 				0.12f
+#define DEADZONE_R 				0.12f
+
+#define MAX_DUTY 				1.0f
+#define MIN_DUTY         		0.08f
+
+// ----------------------------------------------------
+// PID INSTANCE:
+// ----------------------------------------------------
 extern PID_t pid_L;
 extern PID_t pid_R;
-
-// =========================
-// CONFIG
-// =========================
-#define STOP_THRESHOLD   200.0f
-#define MIN_DUTY         0.08f
-#define LOW_SPEED_GAIN   0.8f
-
-// motor gain (IMPORTANT)
-#define MOTOR_GAIN_L     1.15f
-#define MOTOR_GAIN_R     1.00f
 
 // ----------------------------------------------------
 // SUPPORTED FUNCTIONS:

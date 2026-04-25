@@ -9,16 +9,17 @@
 // ----------------------------------------------------
 // PID PARAMETERS:
 // ----------------------------------------------------
-#define PID_DT              0.02f   // 20ms loop
+#define PID_DT          0.02f   // 20ms loop
 
 // Left motor:
-#define PID_KP_L    		5.0f
-#define PID_KI_L    		4.5f
-#define PID_KD_L    		0.15f
+#define PID_KP_L  		2.0f
+#define PID_KI_L  		1.5f
+#define PID_KD_L  		0.08f
+
 // Right motor:
-#define PID_KP_R    		5.0f
-#define PID_KI_R    		4.5f
-#define PID_KD_R    		0.15f
+#define PID_KP_R  		1.8f
+#define PID_KI_R  		1.2f
+#define PID_KD_R  		0.08f
 
 // ----------------------------------------------------
 // PID STRUCTURE:

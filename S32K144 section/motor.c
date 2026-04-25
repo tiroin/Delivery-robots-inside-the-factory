@@ -5,9 +5,12 @@
 // PARAMETERS:
 // ----------------------------------------------------
 
+#define SPEED_ALPHA 0.35f
+
 uint16_t target_L = 0, target_R = 0;
 uint16_t current_L = 0, current_R = 0;
 static uint8_t dir_left = 0, dir_right = 0;
+static float filtered_L = 0.0f, filtered_R = 0.0f;
 volatile uint32_t pulse_count_L = 0;
 volatile uint32_t pulse_count_R = 0;
 float actual_L_val = 0.0f;
@@ -35,8 +38,8 @@ void motor_init(void) {
     target_L  = 0; target_R  = 0;
     set_speed_motors(0, 0);
     // PID initiate:
-    PID_Init(&pid_L, PID_KP_L, PID_KI_L, PID_KD_L, -0.5f, 0.5f);
-    PID_Init(&pid_R, PID_KP_R, PID_KI_R, PID_KD_R, -0.5f, 0.5f);
+    PID_Init(&pid_L, PID_KP_L, PID_KI_L, PID_KD_L, -1.0f, 1.0f);
+    PID_Init(&pid_R, PID_KP_R, PID_KI_R, PID_KD_R, -1.0f, 1.0f);
 }
 
 void set_speed_motors(uint16_t speed_left, uint16_t speed_right) {
@@ -68,148 +71,95 @@ void Hall_Sensor_Handler(void) {
 
 void update_motor_ramp(void) {
     // =========================
-    // RAMP TARGET
+    // 1. RAMP SETPOINT
     // =========================
-    if (current_L < target_L) {
-        current_L = ((uint32_t)current_L + RAMP_STEP >= target_L) ? target_L : current_L + RAMP_STEP;
-    } else if (current_L > target_L) {
-        current_L = (current_L <= RAMP_STEP) ? 0U : current_L - RAMP_STEP;
-    }
-
-    if (current_R < target_R) {
-        current_R = ((uint32_t)current_R + RAMP_STEP >= target_R) ? target_R : current_R + RAMP_STEP;
-    } else if (current_R > target_R) {
-        current_R = (current_R <= RAMP_STEP) ? 0U : current_R - RAMP_STEP;
-    }
+    // Left motor:
+	if (current_L < target_L)
+        current_L = (current_L + RAMP_STEP_L >= target_L) ? target_L : current_L + RAMP_STEP_L;
+    else if (current_L > target_L)
+        current_L = (current_L <= RAMP_STEP_L) ? 0 : current_L - RAMP_STEP_L;
+    // Right motor:
+    if (current_R < target_R)
+        current_R = (current_R + RAMP_STEP_R >= target_R) ? target_R : current_R + RAMP_STEP_R;
+    else if (current_R > target_R)
+        current_R = (current_R <= RAMP_STEP_R) ? 0 : current_R - RAMP_STEP_R;
 
     // =========================
-    // FEEDBACK (pulse average)
+    // 2. READ SENSOR (atomic)
     // =========================
     static uint32_t acc_L = 0, acc_R = 0;
-    static uint8_t  acc_cnt = 0;
+    static uint8_t acc_cnt = 0;
+    static float speed_L = 0.0f, speed_R = 0.0f;
+    uint32_t snap_L, snap_R;
 
-    uint32_t snap_L = pulse_count_L;
-    uint32_t snap_R = pulse_count_R;
+    taskENTER_CRITICAL();
+    snap_L = pulse_count_L;
+    snap_R = pulse_count_R;
     pulse_count_L = 0;
     pulse_count_R = 0;
+    taskEXIT_CRITICAL();
 
     acc_L += snap_L;
     acc_R += snap_R;
     acc_cnt++;
 
     if (acc_cnt >= ACC_WINDOW) {
-        actual_L_val = (float)acc_L / ACC_WINDOW;
-        actual_R_val = (float)acc_R / ACC_WINDOW;
+    	float raw_L = ((float)acc_L / ACC_WINDOW) * SPEED_SCALE_L;
+    	float raw_R = ((float)acc_R / ACC_WINDOW) * SPEED_SCALE_R;
 
-        acc_L = 0;
-        acc_R = 0;
-        acc_cnt = 0;
+    	filtered_L = SPEED_ALPHA * raw_L + (1.0f - SPEED_ALPHA) * filtered_L;
+    	filtered_R = SPEED_ALPHA * raw_R + (1.0f - SPEED_ALPHA) * filtered_R;
+
+    	speed_L = filtered_L;
+    	speed_R = filtered_R;
+    	actual_L_val = filtered_L;
+    	actual_R_val = filtered_R;
+
+    	acc_L = acc_R = 0;
+    	acc_cnt = 0;
     }
 
     // =========================
-    // LOW-PASS FILTER
+    // 6. FEEDFORWARD (MAIN DRIVER)
     // =========================
-    static float filt_L = 0.0f, filt_R = 0.0f;
-
-    filt_L = 0.8f * filt_L + 0.2f * actual_L_val;
-    filt_R = 0.8f * filt_R + 0.2f * actual_R_val;
-
-    actual_L_val = filt_L;
-    actual_R_val = filt_R;
+    float ff_L = 0.0f;
+    float ff_R = 0.0f;
+    if (current_L > 0) ff_L = DEADZONE_L + (1.0f - DEADZONE_L) * ((float)current_L / MAX_SPEED_L);
+    if (current_R > 0) ff_R = DEADZONE_R + (1.0f - DEADZONE_R) * ((float)current_R / MAX_SPEED_R);
 
     // =========================
-    // NORMALIZE
+    // 7. PID (ONLY CORRECTION)
     // =========================
-    float target_norm_L = (float)current_L / (float)MAX_SPEED;
-    float target_norm_R = (float)current_R / (float)MAX_SPEED;
-
-    float speed_norm_L  = actual_L_val / PULSE_PER_PERIOD_L;
-    float speed_norm_R  = actual_R_val / PULSE_PER_PERIOD_R;
-
-    // clamp
-    if (speed_norm_L > 1.0f) speed_norm_L = 1.0f;
-    if (speed_norm_L < 0.0f) speed_norm_L = 0.0f;
-
-    if (speed_norm_R > 1.0f) speed_norm_R = 1.0f;
-    if (speed_norm_R < 0.0f) speed_norm_R = 0.0f;
+    float pid_L_out = PID_Compute(&pid_L, (float)current_L, speed_L, PID_DT);
+    float pid_R_out = PID_Compute(&pid_R, (float)current_R, speed_R, PID_DT);
 
     // =========================
-    // DUTY
+    // 8. COMBINE
     // =========================
-    static float duty_L = 0.3f;
-    static float duty_R = 0.3f;
-
-    float delta_L = 0.0f;
-    float delta_R = 0.0f;
+    float duty_L = ff_L + pid_L_out;
+    float duty_R = ff_R + pid_R_out;
 
     // =========================
-    // STOP REGION
+    // 9. SATURATION + ANTI-WINDUP
     // =========================
-    if (target_L == 0U && target_R == 0U &&
-        actual_L_val < STOP_THRESHOLD &&
-        actual_R_val < STOP_THRESHOLD)
-    {
-        duty_L = 0.0f;
-        duty_R = 0.0f;
+    if (duty_L > MAX_DUTY) duty_L = MAX_DUTY;
+    if (duty_L < MIN_DUTY && current_L > 0) duty_L = MIN_DUTY;
+    if (current_L == 0) duty_L = 0;
 
-        PID_Reset(&pid_L);
-        PID_Reset(&pid_R);
+    if (duty_R > MAX_DUTY) duty_R = MAX_DUTY;
+    if (duty_R < MIN_DUTY && current_R > 0) duty_R = MIN_DUTY;
+    if (current_R == 0) duty_R = 0;
+
+    // =========================
+    // 10. PWM OUTPUT
+    // =========================
+    uint16_t pwm_L = 0, pwm_R = 0;
+    if (duty_L > 0) {
+        pwm_L = HANDLE_MIN + (uint16_t)(duty_L * (HANDLE_MAX - HANDLE_MIN));
     }
-    else
-    {
-        // PID
-        delta_L = PID_Compute(&pid_L, target_norm_L, speed_norm_L, PID_DT);
-        delta_R = PID_Compute(&pid_R, target_norm_R, speed_norm_R, PID_DT);
-
-        // low-speed soften
-        if (speed_norm_L < 0.2f) delta_L *= LOW_SPEED_GAIN;
-        if (speed_norm_R < 0.2f) delta_R *= LOW_SPEED_GAIN;
-
-        duty_L += delta_L;
-        duty_R += delta_R;
+    if (duty_R > 0) {
+        pwm_R = HANDLE_MIN + (uint16_t)(duty_R * (HANDLE_MAX - HANDLE_MIN));
     }
-
-    // =========================
-    // CLAMP DUTY
-    // =========================
-    if (duty_L > 1.0f) duty_L = 1.0f;
-    if (duty_L < 0.0f) duty_L = 0.0f;
-
-    if (duty_R > 1.0f) duty_R = 1.0f;
-    if (duty_R < 0.0f) duty_R = 0.0f;
-
-    // =========================
-    // MIN DUTY
-    // =========================
-    if (duty_L > 0.0f && duty_L < MIN_DUTY) duty_L = MIN_DUTY;
-    if (duty_R > 0.0f && duty_R < MIN_DUTY) duty_R = MIN_DUTY;
-
-    // =========================
-    // APPLY MOTOR GAIN
-    // =========================
-    float duty_L_comp = duty_L * MOTOR_GAIN_L;
-    float duty_R_comp = duty_R * MOTOR_GAIN_R;
-
-    duty_L_dbg = duty_L_comp;
-    duty_R_dbg = duty_R_comp;
-
-    if (duty_L_comp > 1.0f) duty_L_comp = 1.0f;
-    if (duty_R_comp > 1.0f) duty_R_comp = 1.0f;
-
-    // =========================
-    // DUTY -> PWM
-    // =========================
-    uint16_t pwm_L = 0;
-    uint16_t pwm_R = 0;
-
-    if (current_L > 0U) {
-        pwm_L = HANDLE_MIN + (uint16_t)(duty_L_comp * (HANDLE_MAX - HANDLE_MIN));
-    }
-
-    if (current_R > 0U) {
-        pwm_R = HANDLE_MIN + (uint16_t)(duty_R_comp * (HANDLE_MAX - HANDLE_MIN));
-    }
-
     set_speed_motors(pwm_L, pwm_R);
 }
 
@@ -221,16 +171,16 @@ void move_forward(void) {
     apply_direction(0, 0);
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
-    target_L = MAX_SPEED;
-    target_R = MAX_SPEED;
+    target_L = MAX_SPEED_L;
+    target_R = MAX_SPEED_R;
 }
 
 void move_backward(void) {
     apply_direction(1, 1);
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
-    target_L = MAX_SPEED;
-    target_R = MAX_SPEED;
+    target_L = MAX_SPEED_L;
+    target_R = MAX_SPEED_R;
 }
 
 void turn_left(void) {
@@ -238,14 +188,14 @@ void turn_left(void) {
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
     target_L = 0U;
-    target_R = TURN_SPEED;
+    target_R = TURN_SPEED_R;
 }
 
 void turn_right(void) {
     apply_direction(0, 0);
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
-    target_L = TURN_SPEED;
+    target_L = TURN_SPEED_L;
     target_R = 0U;
 }
 
