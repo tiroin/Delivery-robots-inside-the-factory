@@ -57,8 +57,9 @@
 // ----------------------------------------------------
 #define FF_GAIN_L 				(1.0f / MAX_SPEED_L)
 #define FF_GAIN_R 				(1.0f / MAX_SPEED_R)
-#define SPEED_SCALE_L 			(1500.0f / 380.0f)
-#define SPEED_SCALE_R 			(1500.0f / 430.0f)
+#define SPEED_SCALE_L 			(1500.0f / 385.0f)
+#define SPEED_SCALE_R   		(1500.0f / 428.0f)
+#define SPEED_ALPHA 			0.5f
 
 // ----------------------------------------------------
 // DIR PINS:

@@ -13,13 +13,13 @@
 
 // Left motor:
 #define PID_KP_L  		2.0f
-#define PID_KI_L  		1.5f
+#define PID_KI_L  		1.0f
 #define PID_KD_L  		0.08f
 
 // Right motor:
 #define PID_KP_R  		1.8f
-#define PID_KI_R  		1.2f
-#define PID_KD_R  		0.08f
+#define PID_KI_R  		0.8f
+#define PID_KD_R  		0.03f
 
 // ----------------------------------------------------
 // PID STRUCTURE:

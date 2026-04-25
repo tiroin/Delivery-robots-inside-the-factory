@@ -5,8 +5,6 @@
 // PARAMETERS:
 // ----------------------------------------------------
 
-#define SPEED_ALPHA 0.35f
-
 uint16_t target_L = 0, target_R = 0;
 uint16_t current_L = 0, current_R = 0;
 static uint8_t dir_left = 0, dir_right = 0;
