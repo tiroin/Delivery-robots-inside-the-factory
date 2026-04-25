@@ -57,8 +57,8 @@
 // ----------------------------------------------------
 #define FF_GAIN_L 				(1.0f / MAX_SPEED_L)
 #define FF_GAIN_R 				(1.0f / MAX_SPEED_R)
-#define SPEED_SCALE_L 			(1500.0f / 385.0f)
-#define SPEED_SCALE_R   		(1500.0f / 428.0f)
+#define SPEED_SCALE_L 			(1500.0f / 381.0f)
+#define SPEED_SCALE_R   		(1500.0f / 425.0f)
 #define SPEED_ALPHA 			0.5f
 
 // ----------------------------------------------------
@@ -97,7 +97,7 @@ extern float actual_R_val;
 // ----------------------------------------------------
 // DUTY:
 // ----------------------------------------------------
-#define DEADZONE_L 				0.12f
+#define DEADZONE_L 				0.13f
 #define DEADZONE_R 				0.12f
 
 #define MAX_DUTY 				1.0f

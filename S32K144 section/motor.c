@@ -83,7 +83,7 @@ void update_motor_ramp(void) {
         current_R = (current_R <= RAMP_STEP_R) ? 0 : current_R - RAMP_STEP_R;
 
     // =========================
-    // 2. READ SENSOR (atomic)
+    // 2. READ SENSOR (HALL)
     // =========================
     static uint32_t acc_L = 0, acc_R = 0;
     static uint8_t acc_cnt = 0;
@@ -113,52 +113,52 @@ void update_motor_ramp(void) {
     	actual_L_val = filtered_L;
     	actual_R_val = filtered_R;
 
+        // =========================
+        // 6. FEEDFORWARD (MAIN DRIVER)
+        // =========================
+        float ff_L = 0.0f;
+        float ff_R = 0.0f;
+        if (current_L > 0) ff_L = DEADZONE_L + (1.0f - DEADZONE_L) * ((float)current_L / MAX_SPEED_L);
+        if (current_R > 0) ff_R = DEADZONE_R + (1.0f - DEADZONE_R) * ((float)current_R / MAX_SPEED_R);
+
+        // =========================
+        // 7. PID (ONLY CORRECTION)
+        // =========================
+        float pid_L_out = PID_Compute(&pid_L, (float)current_L, speed_L, PID_DT);
+        float pid_R_out = PID_Compute(&pid_R, (float)current_R, speed_R, PID_DT);
+
+        // =========================
+        // 8. COMBINE
+        // =========================
+        float duty_L = ff_L + pid_L_out;
+        float duty_R = ff_R + pid_R_out;
+
+        // =========================
+        // 9. SATURATION + ANTI-WINDUP
+        // =========================
+        if (duty_L > MAX_DUTY) duty_L = MAX_DUTY;
+        if (duty_L < MIN_DUTY && current_L > 0) duty_L = MIN_DUTY;
+        if (current_L == 0) duty_L = 0;
+
+        if (duty_R > MAX_DUTY) duty_R = MAX_DUTY;
+        if (duty_R < MIN_DUTY && current_R > 0) duty_R = MIN_DUTY;
+        if (current_R == 0) duty_R = 0;
+
+        // =========================
+        // 10. PWM OUTPUT
+        // =========================
+        uint16_t pwm_L = 0, pwm_R = 0;
+        if (duty_L > 0) {
+            pwm_L = HANDLE_MIN + (uint16_t)(duty_L * (HANDLE_MAX - HANDLE_MIN));
+        }
+        if (duty_R > 0) {
+            pwm_R = HANDLE_MIN + (uint16_t)(duty_R * (HANDLE_MAX - HANDLE_MIN));
+        }
+        set_speed_motors(pwm_L, pwm_R);
+
     	acc_L = acc_R = 0;
     	acc_cnt = 0;
     }
-
-    // =========================
-    // 6. FEEDFORWARD (MAIN DRIVER)
-    // =========================
-    float ff_L = 0.0f;
-    float ff_R = 0.0f;
-    if (current_L > 0) ff_L = DEADZONE_L + (1.0f - DEADZONE_L) * ((float)current_L / MAX_SPEED_L);
-    if (current_R > 0) ff_R = DEADZONE_R + (1.0f - DEADZONE_R) * ((float)current_R / MAX_SPEED_R);
-
-    // =========================
-    // 7. PID (ONLY CORRECTION)
-    // =========================
-    float pid_L_out = PID_Compute(&pid_L, (float)current_L, speed_L, PID_DT);
-    float pid_R_out = PID_Compute(&pid_R, (float)current_R, speed_R, PID_DT);
-
-    // =========================
-    // 8. COMBINE
-    // =========================
-    float duty_L = ff_L + pid_L_out;
-    float duty_R = ff_R + pid_R_out;
-
-    // =========================
-    // 9. SATURATION + ANTI-WINDUP
-    // =========================
-    if (duty_L > MAX_DUTY) duty_L = MAX_DUTY;
-    if (duty_L < MIN_DUTY && current_L > 0) duty_L = MIN_DUTY;
-    if (current_L == 0) duty_L = 0;
-
-    if (duty_R > MAX_DUTY) duty_R = MAX_DUTY;
-    if (duty_R < MIN_DUTY && current_R > 0) duty_R = MIN_DUTY;
-    if (current_R == 0) duty_R = 0;
-
-    // =========================
-    // 10. PWM OUTPUT
-    // =========================
-    uint16_t pwm_L = 0, pwm_R = 0;
-    if (duty_L > 0) {
-        pwm_L = HANDLE_MIN + (uint16_t)(duty_L * (HANDLE_MAX - HANDLE_MIN));
-    }
-    if (duty_R > 0) {
-        pwm_R = HANDLE_MIN + (uint16_t)(duty_R * (HANDLE_MAX - HANDLE_MIN));
-    }
-    set_speed_motors(pwm_L, pwm_R);
 }
 
 // ----------------------------------------------------
