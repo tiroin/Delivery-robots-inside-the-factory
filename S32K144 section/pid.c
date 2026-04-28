@@ -30,8 +30,9 @@ float PID_Compute(PID_t *pid, float target, float actual, float dt) {
 
     // I (with clamp):
     pid->integral += error * dt;
-    if (pid->integral > 2.0f) pid->integral = 2.0f;
-    if (pid->integral < -2.0f) pid->integral = -2.0f;
+    float integral_limit = pid->output_max / (pid->Ki > 0 ? pid->Ki : 1.0f);
+    if (pid->integral >  integral_limit) pid->integral =  integral_limit;
+    if (pid->integral < -integral_limit) pid->integral = -integral_limit;
     float I = pid->Ki * pid->integral;
 
     // D:
@@ -42,13 +43,8 @@ float PID_Compute(PID_t *pid, float target, float actual, float dt) {
     float output = P + I + D;
 
     // Clamp (within its range):
-    if (output > pid->output_max) {
-        output = pid->output_max;
-        if (error > 0.0f) pid->integral -= error * dt;
-    } else if (output < pid->output_min) {
-        output = pid->output_min;
-        if (error < 0.0f) pid->integral -= error * dt;
-    }
+    if (output > pid->output_max) output = pid->output_max;
+    if (output < pid->output_min) output = pid->output_min;
 
     return output;
 }

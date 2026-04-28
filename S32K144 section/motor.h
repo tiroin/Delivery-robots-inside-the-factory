@@ -38,7 +38,7 @@
 // Turning speed:
 #define TURN_SPEED_L          	1000U
 #define TURN_SPEED_R          	1000U
-#define TURN_INNER          	900U
+#define TURN_INNER          	500U
 
 // ----------------------------------------------------
 // RAMP:
@@ -57,8 +57,9 @@
 // ----------------------------------------------------
 #define FF_GAIN_L 				(1.0f / MAX_SPEED_L)
 #define FF_GAIN_R 				(1.0f / MAX_SPEED_R)
-#define SPEED_SCALE_L 			(1500.0f / 381.0f)
-#define SPEED_SCALE_R   		(1500.0f / 425.0f)
+#define FF_HEADROOM  			0.15f
+#define SPEED_SCALE_L         	(1500.0f / (240.0f * 3.0f))
+#define SPEED_SCALE_R         	(1500.0f / (424.0f * 3.0f))
 #define SPEED_ALPHA 			0.5f
 
 // ----------------------------------------------------
@@ -72,15 +73,18 @@
 // ----------------------------------------------------
 // HALL PORT:
 // ----------------------------------------------------
-#define LEFT_HALL_PORT      	PORTD
-#define LEFT_HALL_PIN       	1U
-#define RIGHT_HALL_PORT     	PORTD
-#define RIGHT_HALL_PIN      	2U
+#define LEFT_HALL_PIN_A       	1U   // PTD1
+#define LEFT_HALL_PIN_B       	3U   // PTD3
+#define LEFT_HALL_PIN_C       	4U
+
+#define RIGHT_HALL_PIN_A      	2U   // PTD2
+#define RIGHT_HALL_PIN_B      	13U  // PTD13
+#define RIGHT_HALL_PIN_C      	14U  // PTD14
 
 // ----------------------------------------------------
 // WINDOW ACCUMULATION:
 // ----------------------------------------------------
-#define ACC_WINDOW			 	12
+#define ACC_WINDOW			 	4
 
 // ----------------------------------------------------
 // EXPOSED VARIABLES:
@@ -99,7 +103,7 @@ extern float actual_R_val;
 // ----------------------------------------------------
 // Dead zone:
 #define DEADZONE_L 				0.13f
-#define DEADZONE_R 				0.12f
+#define DEADZONE_R 				0.18f
 // Duty for clamping:
 #define MAX_DUTY 				1.0f
 #define MIN_DUTY         		0.08f
@@ -115,24 +119,24 @@ extern PID_t pid_R;
 // ----------------------------------------------------
 
 // Initiate motor parameters:
-void    motor_init       (void);
+void    motor_init       	(void);
 // Set motor speed:
-void    set_speed_motors (uint16_t speed_left, uint16_t speed_right);
+void    set_speed_motors 	(uint16_t speed_left, uint16_t speed_right);
 // Update motor:
-void    update_motor_ramp(void);
+void    update_motor_ramp	(void);
 // Check if motors stop:
-uint8_t motors_stopped   (void);
+uint8_t motors_stopped   	(void);
 // Moving forward:
-void    move_forward     (void);
+void    move_forward     	(void);
 // Moving backward:
-void    move_backward    (void);
+void    move_backward    	(void);
 // Turning left:
-void    turn_left        (void);
+void    turn_left        	(void);
 // Turning right:
-void    turn_right       (void);
+void    turn_right       	(void);
 // Stopping robot:
-void    stop_robot       (void);
+void    stop_robot       	(void);
 // Hall sensor handler:
-void 	Hall_Sensor_Handler(void);
+void 	Hall_Sensor_Handler	(void);
 
 #endif /* MOTOR_H_ */

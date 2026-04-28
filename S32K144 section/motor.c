@@ -67,21 +67,20 @@ void Hall_Sensor_Handler(void) {
     uint32_t interruptFlags = PINS_DRV_GetPortIntFlag(PORTD);
 
     // Left hall:
-    if ((interruptFlags >> LEFT_HALL_PIN) & 1U) {
+    if (interruptFlags & ((1U << LEFT_HALL_PIN_A) | (1U << LEFT_HALL_PIN_B) | (1U << LEFT_HALL_PIN_C))) {
         pulse_count_L++;
-        PORTD->ISFR = (1U << LEFT_HALL_PIN);
+        PORTD->ISFR = (1U << LEFT_HALL_PIN_A) | (1U << LEFT_HALL_PIN_B) | (1U << LEFT_HALL_PIN_C);
     }
 
     // Right hall:
-    if ((interruptFlags >> RIGHT_HALL_PIN) & 1U) {
+    if (interruptFlags & ((1U << RIGHT_HALL_PIN_A) | (1U << RIGHT_HALL_PIN_B) | (1U << RIGHT_HALL_PIN_C))) {
         pulse_count_R++;
-        PORTD->ISFR = (1U << RIGHT_HALL_PIN);
+        PORTD->ISFR = (1U << RIGHT_HALL_PIN_A) | (1U << RIGHT_HALL_PIN_B) | (1U << RIGHT_HALL_PIN_C);
     }
 }
 
 // Update motor:
 void update_motor_ramp(void) {
-
     // RAMP SETPOINT:
     // Left motor:
 	if (current_L < target_L)
@@ -95,7 +94,6 @@ void update_motor_ramp(void) {
         current_R = (current_R <= RAMP_STEP_R) ? 0 : current_R - RAMP_STEP_R;
 
     // READ SENSOR (HALL):
-
     static uint32_t acc_L = 0, acc_R = 0;
     static uint8_t acc_cnt = 0;
     static float speed_L = 0.0f, speed_R = 0.0f;
@@ -128,8 +126,8 @@ void update_motor_ramp(void) {
         // FEEDFORWARD
         float ff_L = 0.0f;
         float ff_R = 0.0f;
-        if (current_L > 0) ff_L = DEADZONE_L + (1.0f - DEADZONE_L) * ((float)current_L / MAX_SPEED_L);
-        if (current_R > 0) ff_R = DEADZONE_R + (1.0f - DEADZONE_R) * ((float)current_R / MAX_SPEED_R);
+        if (current_L > 0) ff_L = DEADZONE_L + (MAX_DUTY - DEADZONE_L - FF_HEADROOM) * ((float)current_L / MAX_SPEED_L);
+        if (current_R > 0) ff_R = DEADZONE_R + (MAX_DUTY - DEADZONE_R - FF_HEADROOM) * ((float)current_R / MAX_SPEED_R);
 
         // PID
         float pid_L_out = PID_Compute(&pid_L, (float)current_L, speed_L, PID_DT);
@@ -194,7 +192,7 @@ void turn_left(void) {
     apply_direction(0, 0);
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
-    target_L = 0U;
+    target_L = 0;
     target_R = TURN_SPEED_R;
 }
 
@@ -204,7 +202,7 @@ void turn_right(void) {
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
     target_L = TURN_SPEED_L;
-    target_R = 0U;
+    target_R = 0;
 }
 
 // Stopping robot:
@@ -213,4 +211,6 @@ void stop_robot(void) {
     PID_Reset(&pid_R);
     target_L = 0U;
     target_R = 0U;
+    filtered_L = 0.0f;
+    filtered_R = 0.0f;
 }
