@@ -31,9 +31,9 @@
 #define FTM_PERIOD          	20000U
 
 // Motor speed:
-#define MAX_SPEED_L           	1500U
-#define MAX_SPEED_R				1500U
-#define MIN_RUNNING_SPEED   	900U
+#define MAX_SPEED_L           	2000U
+#define MAX_SPEED_R				2000U
+#define MIN_RUNNING_SPEED   	1000U
 
 // Turning speed:
 #define TURN_SPEED_L          	1000U
@@ -58,8 +58,8 @@
 #define FF_GAIN_L 				(1.0f / MAX_SPEED_L)
 #define FF_GAIN_R 				(1.0f / MAX_SPEED_R)
 #define FF_HEADROOM  			0.15f
-#define SPEED_SCALE_L         	(1500.0f / (240.0f * 3.0f))
-#define SPEED_SCALE_R         	(1500.0f / (424.0f * 3.0f))
+#define SPEED_SCALE_L         	(1500.0f / (238.0f * 3.0f))
+#define SPEED_SCALE_R         	(1500.0f / (423.0f * 3.0f))
 #define SPEED_ALPHA 			0.5f
 
 // ----------------------------------------------------
@@ -120,22 +120,20 @@ extern PID_t pid_R;
 
 // Initiate motor parameters:
 void    motor_init       	(void);
-// Set motor speed:
+// Set motor speed (raw PWM):
 void    set_speed_motors 	(uint16_t speed_left, uint16_t speed_right);
-// Update motor:
+// Update motor ramp + PID:
 void    update_motor_ramp	(void);
 // Check if motors stop:
 uint8_t motors_stopped   	(void);
-// Moving forward:
-void    move_forward     	(void);
-// Moving backward:
-void    move_backward    	(void);
-// Turning left:
-void    turn_left        	(void);
-// Turning right:
-void    turn_right       	(void);
-// Stopping robot:
-void    stop_robot       	(void);
+
+// Movement commands – all accept a target speed [MIN_RUNNING_SPEED, MAX_SPEED_L]:
+void    move_forward     	(uint16_t speed);   // both wheels forward at speed
+void    move_backward    	(uint16_t speed);   // both wheels backward at speed
+void    turn_left        	(uint16_t speed);   // right wheel at speed, left stops
+void    turn_right       	(uint16_t speed);   // left wheel at speed, right stops
+void    stop_robot       	(void);             // both wheels stop
+
 // Hall sensor handler:
 void 	Hall_Sensor_Handler	(void);
 

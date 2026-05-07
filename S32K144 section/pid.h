@@ -12,13 +12,13 @@
 #define PID_DT          0.02f
 
 // PID parameters for the left motor:
-#define PID_KP_L  		5.0f
-#define PID_KI_L  		3.5f
-#define PID_KD_L  		0.06f
+#define PID_KP_L  		3.9f
+#define PID_KI_L  		3.7f
+#define PID_KD_L  		0.05f
 
 // PID parameters for the right motor:
-#define PID_KP_R  		4.3f
-#define PID_KI_R  		1.5f
+#define PID_KP_R  		4.1f
+#define PID_KI_R  		1.7f
 #define PID_KD_R  		0.05f
 
 // ----------------------------------------------------

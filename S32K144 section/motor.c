@@ -39,6 +39,13 @@ static void apply_direction(uint8_t left_dir, uint8_t right_dir) {
     else           PINS_DRV_ClearPins(RIGHT_DIR_PORT, 1U << RIGHT_DIR_PIN);
 }
 
+// Clamp speed to valid range:
+static uint16_t clamp_speed(uint16_t spd) {
+    if (spd < MIN_RUNNING_SPEED) spd = MIN_RUNNING_SPEED;
+    if (spd > MAX_SPEED_L)       spd = MAX_SPEED_L;
+    return spd;
+}
+
 // Initiate motor parameters:
 void motor_init(void) {
     apply_direction(0, 0);
@@ -83,7 +90,7 @@ void Hall_Sensor_Handler(void) {
 void update_motor_ramp(void) {
     // RAMP SETPOINT:
     // Left motor:
-	if (current_L < target_L)
+    if (current_L < target_L)
         current_L = (current_L + RAMP_STEP_L >= target_L) ? target_L : current_L + RAMP_STEP_L;
     else if (current_L > target_L)
         current_L = (current_L <= RAMP_STEP_L) ? 0 : current_L - RAMP_STEP_L;
@@ -111,17 +118,17 @@ void update_motor_ramp(void) {
     acc_cnt++;
 
     if (acc_cnt >= ACC_WINDOW) {
-    	// FILTERING:
-    	float raw_L = ((float)acc_L / ACC_WINDOW) * SPEED_SCALE_L;
-    	float raw_R = ((float)acc_R / ACC_WINDOW) * SPEED_SCALE_R;
+        // FILTERING:
+        float raw_L = ((float)acc_L / ACC_WINDOW) * SPEED_SCALE_L;
+        float raw_R = ((float)acc_R / ACC_WINDOW) * SPEED_SCALE_R;
 
-    	filtered_L = SPEED_ALPHA * raw_L + (1.0f - SPEED_ALPHA) * filtered_L;
-    	filtered_R = SPEED_ALPHA * raw_R + (1.0f - SPEED_ALPHA) * filtered_R;
+        filtered_L = SPEED_ALPHA * raw_L + (1.0f - SPEED_ALPHA) * filtered_L;
+        filtered_R = SPEED_ALPHA * raw_R + (1.0f - SPEED_ALPHA) * filtered_R;
 
-    	speed_L = filtered_L;
-    	speed_R = filtered_R;
-    	actual_L_val = filtered_L;
-    	actual_R_val = filtered_R;
+        speed_L = filtered_L;
+        speed_R = filtered_R;
+        actual_L_val = filtered_L;
+        actual_R_val = filtered_R;
 
         // FEEDFORWARD
         float ff_L = 0.0f;
@@ -160,8 +167,8 @@ void update_motor_ramp(void) {
         set_speed_motors(pwm_L, pwm_R);
 
         // RESET:
-    	acc_L = acc_R = 0;
-    	acc_cnt = 0;
+        acc_L = acc_R = 0;
+        acc_cnt = 0;
     }
 }
 
@@ -170,47 +177,51 @@ void update_motor_ramp(void) {
 // ----------------------------------------------------
 
 // Moving forward:
-void move_forward(void) {
+void move_forward(uint16_t speed) {
     apply_direction(0, 0);
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
-    target_L = MAX_SPEED_L;
-    target_R = MAX_SPEED_R;
+    speed    = clamp_speed(speed);
+    target_L = speed;
+    target_R = speed;
 }
 
 // Moving backward:
-void move_backward(void) {
+void move_backward(uint16_t speed) {
     apply_direction(1, 1);
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
-    target_L = MAX_SPEED_L;
-    target_R = MAX_SPEED_R;
+    speed    = clamp_speed(speed);
+    target_L = speed;
+    target_R = speed;
 }
 
-// Turning left:
-void turn_left(void) {
+// Turning left  (right wheel = outer / full speed, left wheel stops):
+void turn_left(uint16_t speed) {
     apply_direction(0, 0);
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
-    target_L = 0;
-    target_R = TURN_SPEED_R;
+    speed    = clamp_speed(speed);
+    target_L = 0U;
+    target_R = speed;
 }
 
-// Moving right:
-void turn_right(void) {
+// Turning right (left wheel = outer / full speed, right wheel stops):
+void turn_right(uint16_t speed) {
     apply_direction(0, 0);
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
-    target_L = TURN_SPEED_L;
-    target_R = 0;
+    speed    = clamp_speed(speed);
+    target_L = speed;
+    target_R = 0U;
 }
 
 // Stopping robot:
 void stop_robot(void) {
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
-    target_L = 0U;
-    target_R = 0U;
+    target_L   = 0U;
+    target_R   = 0U;
     filtered_L = 0.0f;
     filtered_R = 0.0f;
 }
