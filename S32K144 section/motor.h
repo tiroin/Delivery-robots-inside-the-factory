@@ -31,20 +31,20 @@
 #define FTM_PERIOD          	20000U
 
 // Motor speed:
-#define MAX_SPEED_L           	2000U
-#define MAX_SPEED_R				2000U
-#define MIN_RUNNING_SPEED   	1000U
+#define MAX_SPEED_L           	250U
+#define MAX_SPEED_R				250U
+#define MIN_RUNNING_SPEED   	150U
 
 // Turning speed:
-#define TURN_SPEED_L          	1000U
-#define TURN_SPEED_R          	1000U
-#define TURN_INNER          	500U
+#define TURN_SPEED_L          	150U
+#define TURN_SPEED_R          	150U
+#define TURN_INNER          	100U
 
 // ----------------------------------------------------
 // RAMP:
 // ----------------------------------------------------
-#define RAMP_STEP_L           	500U
-#define RAMP_STEP_R           	500U
+#define RAMP_STEP_L           	50U
+#define RAMP_STEP_R           	50U
 
 #define RAMP_DOWN_STEPS_L     	((MAX_SPEED_L + RAMP_STEP_L - 1) / RAMP_STEP_L)
 #define RAMP_DOWN_STEPS_R     	((MAX_SPEED_R + RAMP_STEP_R - 1) / RAMP_STEP_R)
@@ -57,10 +57,10 @@
 // ----------------------------------------------------
 #define FF_GAIN_L 				(1.0f / MAX_SPEED_L)
 #define FF_GAIN_R 				(1.0f / MAX_SPEED_R)
-#define FF_HEADROOM  			0.15f
-#define SPEED_SCALE_L         	(1500.0f / (238.0f * 3.0f))
-#define SPEED_SCALE_R         	(1500.0f / (423.0f * 3.0f))
-#define SPEED_ALPHA 			0.5f
+#define FF_HEADROOM  			1.0f
+#define SPEED_SCALE_L         	1.515f
+#define SPEED_SCALE_R         	1.250f
+#define SPEED_ALPHA 			0.3f
 
 // ----------------------------------------------------
 // DIR PINS:
@@ -102,8 +102,8 @@ extern float actual_R_val;
 // DUTY:
 // ----------------------------------------------------
 // Dead zone:
-#define DEADZONE_L 				0.13f
-#define DEADZONE_R 				0.18f
+#define DEADZONE_L 				0.0f
+#define DEADZONE_R 				0.0f
 // Duty for clamping:
 #define MAX_DUTY 				1.0f
 #define MIN_DUTY         		0.08f
@@ -127,7 +127,7 @@ void    update_motor_ramp	(void);
 // Check if motors stop:
 uint8_t motors_stopped   	(void);
 
-// Movement commands – all accept a target speed [MIN_RUNNING_SPEED, MAX_SPEED_L]:
+// Movement commands: all accept a target speed [MIN_RUNNING_SPEED, MAX_SPEED_L]:
 void    move_forward     	(uint16_t speed);   // both wheels forward at speed
 void    move_backward    	(uint16_t speed);   // both wheels backward at speed
 void    turn_left        	(uint16_t speed);   // right wheel at speed, left stops

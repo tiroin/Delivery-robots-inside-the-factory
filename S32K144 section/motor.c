@@ -125,34 +125,28 @@ void update_motor_ramp(void) {
         filtered_L = SPEED_ALPHA * raw_L + (1.0f - SPEED_ALPHA) * filtered_L;
         filtered_R = SPEED_ALPHA * raw_R + (1.0f - SPEED_ALPHA) * filtered_R;
 
-        speed_L = filtered_L;
-        speed_R = filtered_R;
-        actual_L_val = filtered_L;
-        actual_R_val = filtered_R;
+        float clamped_L = filtered_L;
+        float clamped_R = filtered_R;
+        if (current_L > 0 && clamped_L > (float)current_L * 1.5f) clamped_L = (float)current_L * 1.5f;
+        if (current_R > 0 && clamped_R > (float)current_R * 1.5f) clamped_R = (float)current_R * 1.5f;
 
-        // FEEDFORWARD
-        float ff_L = 0.0f;
-        float ff_R = 0.0f;
-        if (current_L > 0) ff_L = DEADZONE_L + (MAX_DUTY - DEADZONE_L - FF_HEADROOM) * ((float)current_L / MAX_SPEED_L);
-        if (current_R > 0) ff_R = DEADZONE_R + (MAX_DUTY - DEADZONE_R - FF_HEADROOM) * ((float)current_R / MAX_SPEED_R);
+        speed_L = clamped_L;
+        speed_R = clamped_R;
+        actual_L_val = clamped_L;
+        actual_R_val = clamped_R;
 
-        // PID
-        float pid_L_out = PID_Compute(&pid_L, (float)current_L, speed_L, PID_DT);
-        float pid_R_out = PID_Compute(&pid_R, (float)current_R, speed_R, PID_DT);
-
-        // COMBINE
-        float duty_L = ff_L + pid_L_out;
-        float duty_R = ff_R + pid_R_out;
+        // PID ONLY
+        static float duty_L = 0.0f, duty_R = 0.0f;
+        duty_L = PID_Compute(&pid_L, (float)current_L, speed_L, PID_DT);
+        duty_R = PID_Compute(&pid_R, (float)current_R, speed_R, PID_DT);
 
         // SATURATION + ANTI-WINDUP
-        // Left motor:
         if (duty_L > MAX_DUTY) duty_L = MAX_DUTY;
         if (duty_L < MIN_DUTY && current_L > 0) duty_L = MIN_DUTY;
-        if (current_L == 0) duty_L = 0;
-        // Right motor:
         if (duty_R > MAX_DUTY) duty_R = MAX_DUTY;
         if (duty_R < MIN_DUTY && current_R > 0) duty_R = MIN_DUTY;
-        if (current_R == 0) duty_R = 0;
+        if (current_L == 0) { duty_L = 0.0f; PID_Reset(&pid_L); filtered_L = 0.0f; }
+        if (current_R == 0) { duty_R = 0.0f; PID_Reset(&pid_R); filtered_R = 0.0f; }
 
         // PWM OUTPUT
         uint16_t pwm_L = 0, pwm_R = 0;
