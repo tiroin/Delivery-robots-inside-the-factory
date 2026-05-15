@@ -196,7 +196,7 @@ void turn_left(uint16_t speed) {
     PID_Reset(&pid_L);
     PID_Reset(&pid_R);
     speed    = clamp_speed(speed);
-    target_L = 0U;
+    target_L = TURN_INNER;
     target_R = speed;
 }
 
@@ -207,7 +207,7 @@ void turn_right(uint16_t speed) {
     PID_Reset(&pid_R);
     speed    = clamp_speed(speed);
     target_L = speed;
-    target_R = 0U;
+    target_R = TURN_INNER;
 }
 
 // Stopping robot:

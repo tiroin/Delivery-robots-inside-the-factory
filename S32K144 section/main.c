@@ -33,26 +33,32 @@ TaskHandle_t Task_CAN_Rx, Task_CAN_Tx, Task_Motor;
 QueueHandle_t xMotorCmdQueue;
 
 // ----------------------------------------------------
+// CMD ENUM
+// ----------------------------------------------------
+#define CMD_STOP        0x00U
+#define CMD_FORWARD     0x01U
+#define CMD_BACKWARD    0x02U
+#define CMD_TURN_LEFT   0x03U
+#define CMD_TURN_RIGHT  0x04U
+
+// ----------------------------------------------------
 // MOTOR COMMAND STRUCT:
 // ----------------------------------------------------
 typedef struct {
-    uint8_t  cmd;      // 1..5
-    uint16_t speed_L;  // 0 or [MIN_RUNNING_SPEED, MAX_SPEED_L]
-    uint16_t speed_R;  // 0 or [MIN_RUNNING_SPEED, MAX_SPEED_R]
+    uint8_t  cmd;      // CMD_STOP / CMD_FORWARD / CMD_BACKWARD / CMD_TURN_LEFT / CMD_TURN_RIGHT
+    uint16_t speed_L;  // [MIN_RUNNING_SPEED, MAX_SPEED_L] or 0
+    uint16_t speed_R;  // [MIN_RUNNING_SPEED, MAX_SPEED_R] or 0
 } MotorCmd_t;
 
 // ----------------------------------------------------
 // PARSER:
-// Converts raw CAN bytes to MotorCmd_t.
-// Returns 1 on success, 0 if the frame is malformed.
 // ----------------------------------------------------
 static uint8_t parse_can_frame(const uint8_t *data, uint8_t dlc, MotorCmd_t *out) {
-    if (dlc < 5) return 0U;
-    // Parse:
+    if (dlc < 5U) return 0U;
     out->cmd     = data[0];
     out->speed_L = (uint16_t)((data[1] << 8) | data[2]);
     out->speed_R = (uint16_t)((data[3] << 8) | data[4]);
-    // Clamp:
+    // Clamp speed:
     if (out->speed_L > (uint16_t)MAX_SPEED_L) out->speed_L = MAX_SPEED_L;
     if (out->speed_R > (uint16_t)MAX_SPEED_R) out->speed_R = MAX_SPEED_R;
     return 1U;
@@ -105,7 +111,7 @@ void task_can_rx(void *pvParameters) {
             uint8_t emg_val = rxData_emergency.data[0];
             if (emg_val == 0xFF) {
                 emergency_flag = 1;
-                MotorCmd_t stop_cmd = { .cmd = 5U, .speed_L = 0U, .speed_R = 0U };
+                MotorCmd_t stop_cmd = { .cmd = CMD_STOP, .speed_L = 0U, .speed_R = 0U };
                 xQueueOverwrite(xMotorCmdQueue, &stop_cmd);
             } else {
                 emergency_flag = 0;
@@ -115,7 +121,6 @@ void task_can_rx(void *pvParameters) {
         // --- Control message ---
         if (FLEXCAN_DRV_GetTransferStatus(INST_CAN, MB_RX_CONTROL) == STATUS_SUCCESS) {
             MotorCmd_t motor_cmd;
-            // rxData_control.dataLen holds the number of valid bytes in the frame:
             if (parse_can_frame(rxData_control.data, rxData_control.dataLen, &motor_cmd)) {
                 if (emergency_flag == 0) {
                     xQueueOverwrite(xMotorCmdQueue, &motor_cmd);
@@ -144,8 +149,8 @@ void task_motor_handle(void *pvParameters) {
     uint8_t log_divider = 0;
 
     // Commands:
-    MotorCmd_t cmd      = { .cmd = 0U, .speed_L = 0U, .speed_R = 0U };
-    MotorCmd_t last_cmd = { .cmd = 0U, .speed_L = 0U, .speed_R = 0U };
+    MotorCmd_t cmd      = { .cmd = CMD_STOP, .speed_L = 0U, .speed_R = 0U };
+    MotorCmd_t last_cmd = { .cmd = CMD_STOP, .speed_L = 0U, .speed_R = 0U };
 
     // For loop:
     for (;;) {
@@ -153,34 +158,23 @@ void task_motor_handle(void *pvParameters) {
             if (cmd.cmd     != last_cmd.cmd     ||
                 cmd.speed_L != last_cmd.speed_L ||
                 cmd.speed_R != last_cmd.speed_R) {
-                // Call movement function to set direction + reset PID,
-                // then immediately override target_L / target_R with the
-                // individual wheel speeds received over CAN:
+
                 switch (cmd.cmd) {
-                    case 1:
-                        move_forward(cmd.speed_L);  // sets direction fwd + PID reset
-                        target_L = cmd.speed_L;
-                        target_R = cmd.speed_R;
+                    case CMD_FORWARD:
+                        move_forward(cmd.speed_L);
                         break;
-                    case 2:
-                        move_backward(cmd.speed_L); // sets direction rev + PID reset
-                        target_L = cmd.speed_L;
-                        target_R = cmd.speed_R;
+                    case CMD_BACKWARD:
+                        move_backward(cmd.speed_L);
                         break;
-                    case 3:
-                        turn_left(cmd.speed_R);     // sets direction + PID reset
-                        target_L = cmd.speed_L;
-                        target_R = cmd.speed_R;
+                    case CMD_TURN_LEFT:
+                        turn_left(cmd.speed_R);
                         break;
-                    case 4:
-                        turn_right(cmd.speed_L);    // sets direction + PID reset
-                        target_L = cmd.speed_L;
-                        target_R = cmd.speed_R;
+                    case CMD_TURN_RIGHT:
+                        turn_right(cmd.speed_L);
                         break;
-                    case 5:
-                        stop_robot();               // target_L = target_R = 0 inside
-                        break;
+                    case CMD_STOP:
                     default:
+                        stop_robot();
                         break;
                 }
                 last_cmd = cmd;

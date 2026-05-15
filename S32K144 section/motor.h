@@ -33,12 +33,12 @@
 // Motor speed:
 #define MAX_SPEED_L           	250U
 #define MAX_SPEED_R				250U
-#define MIN_RUNNING_SPEED   	150U
+#define MIN_RUNNING_SPEED   	70U
 
 // Turning speed:
 #define TURN_SPEED_L          	150U
 #define TURN_SPEED_R          	150U
-#define TURN_INNER          	100U
+#define TURN_INNER          	70U
 
 // ----------------------------------------------------
 // RAMP:
