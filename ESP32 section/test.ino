@@ -17,6 +17,7 @@
 #define CAN_ID_EMERGENCY  0x001
 #define CAN_ID_CONTROL    0x111
 #define CAN_ID_STATUS     0x222
+#define CAN_ID_ANGLE      0x050
 
 #define CMD_STOP        0x00
 #define CMD_FORWARD     0x01
@@ -31,6 +32,7 @@
 #define OLED_UPDATE_PERIOD_MS  300UL
 #define CAN_TIMEOUT_MS         1500UL
 #define GYRO_UPDATE_PERIOD_MS  50UL
+#define ANGLE_TX_PERIOD_MS     50UL
 
 #define MPU6050_ADDR            0x68
 #define MPU6050_RA_PWR_MGMT_1   0x6B
@@ -58,10 +60,14 @@ static unsigned long last_status_ms = 0UL;
 static unsigned long last_cmd_tx_ms = 0UL;
 static unsigned long last_oled_ms = 0UL;
 static unsigned long last_gyro_ms = 0UL;
+static unsigned long last_angle_tx_ms = 0UL;
 static unsigned long boot_ms = 0UL;
 
 static uint32_t tx_ok_count = 0UL;
 static uint32_t tx_fail_count = 0UL;
+static uint32_t angle_tx_ok_count = 0UL;
+static uint32_t angle_tx_fail_count = 0UL;
+static uint8_t angle_seq = 0U;
 static uint32_t rx_status_count = 0UL;
 static uint32_t rx_other_count = 0UL;
 
@@ -127,6 +133,52 @@ static bool send_cmd(uint8_t cmd, uint16_t spd_l, uint16_t spd_r) {
 
     tx_fail_count++;
     return false;
+}
+
+
+static int16_t clamp_i16_scaled(float value, float scale) {
+    float scaled = value * scale;
+    if (scaled > 32767.0f) scaled = 32767.0f;
+    if (scaled < -32768.0f) scaled = -32768.0f;
+    if (scaled >= 0.0f) return (int16_t)(scaled + 0.5f);
+    return (int16_t)(scaled - 0.5f);
+}
+
+static bool send_angle_frame(void) {
+    if (!can_ready) return false;
+    if (!gyro_ok) return false;
+    if (!can_status_ok()) return false;
+
+    int16_t yaw_cdeg = clamp_i16_scaled(yaw_deg, 100.0f);
+    int16_t gz_cdps = clamp_i16_scaled(gyro_z_dps, 100.0f);
+
+    twai_message_t msg = {};
+    msg.identifier = CAN_ID_ANGLE;
+    msg.flags = TWAI_MSG_FLAG_NONE;
+    msg.data_length_code = 6;
+    msg.data[0] = angle_seq++;
+    msg.data[1] = 0x01U;
+    msg.data[2] = (uint8_t)((uint16_t)yaw_cdeg >> 8);
+    msg.data[3] = (uint8_t)((uint16_t)yaw_cdeg & 0xFFU);
+    msg.data[4] = (uint8_t)((uint16_t)gz_cdps >> 8);
+    msg.data[5] = (uint8_t)((uint16_t)gz_cdps & 0xFFU);
+
+    esp_err_t ret = twai_transmit(&msg, pdMS_TO_TICKS(10));
+    if (ret == ESP_OK) {
+        angle_tx_ok_count++;
+        return true;
+    }
+
+    angle_tx_fail_count++;
+    return false;
+}
+
+static void send_angle_if_due(void) {
+    unsigned long now = millis();
+    if (now - last_angle_tx_ms >= ANGLE_TX_PERIOD_MS) {
+        (void)send_angle_frame();
+        last_angle_tx_ms = now;
+    }
 }
 
 static void send_current_command_if_due(void) {
@@ -283,11 +335,15 @@ static void update_oled_if_due(void) {
     display.print(" R:");
     display.print(feedback_r);
 
+    display.setCursor(80, 36);
+    display.print("E:");
+    display.print(emergency_flag ? "ON" : "OFF");
+
     display.setCursor(0, 48);
-    display.print("GZ:");
-    display.print(gyro_z_dps, 1);
-    display.print(" Y:");
+    display.print("Y:");
     display.print(yaw_deg, 1);
+    display.print(" ATX:");
+    display.print(angle_tx_ok_count);
 
     display.display();
 }
@@ -296,7 +352,7 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Robot CAN Control</title>
 <style>
-body{font-family:monospace;background:#101010;color:#00ff88;margin:0;padding:18px;display:flex;flex-direction:column;align-items:center}h2{margin:8px}.box{width:330px;background:#1b1b1b;border:1px solid #333;border-radius:12px;padding:14px;margin:8px}.bad{border-color:#ff4444}.row{display:flex;justify-content:space-between;margin:6px 0}.v{color:white}button{font-family:monospace;font-size:18px;margin:6px;padding:16px 22px;border-radius:12px;border:2px solid #333;background:#202020;color:#00ff88}.stop{color:#ff4444;border-color:#ff4444}input{width:100%;accent-color:#00ff88}
+body{font-family:monospace;background:#101010;color:#00ff88;margin:0;padding:18px;display:flex;flex-direction:column;align-items:center}h2{margin:8px}.box{width:330px;background:#1b1b1b;border:1px solid #333;border-radius:12px;padding:14px;margin:8px}.bad{border-color:#ff4444}.emg{border-color:#ff4444;box-shadow:0 0 14px #ff4444}.row{display:flex;justify-content:space-between;margin:6px 0}.v{color:white}.red{color:#ff4444}.green{color:#00ff88}button{font-family:monospace;font-size:18px;margin:6px;padding:16px 22px;border-radius:12px;border:2px solid #333;background:#202020;color:#00ff88}.stop{color:#ff4444;border-color:#ff4444}input{width:100%;accent-color:#00ff88}
 </style></head><body>
 <h2>ROBOT CAN CONTROL</h2>
 <div class="box"><div class="row"><span>SPEED</span><span id="spdv" class="v">150</span></div><input id="spd" type="range" min="50" max="255" value="150" oninput="spdv.textContent=this.value"></div>
@@ -305,10 +361,12 @@ body{font-family:monospace;background:#101010;color:#00ff88;margin:0;padding:18p
 <div><button onclick="send('backward')">BACKWARD</button></div>
 <div class="box" id="canbox"><h3>// CAN</h3><div class="row"><span>STATUS</span><span id="ok" class="v">--</span></div><div class="row"><span>AGE</span><span id="age" class="v">--</span></div><div class="row"><span>TWAI</span><span id="twai" class="v">--</span></div><div class="row"><span>TX/RX ERR</span><span id="err" class="v">--</span></div><div class="row"><span>BUS ERR</span><span id="bus" class="v">--</span></div><div class="row"><span>RX STATUS</span><span id="rxs" class="v">--</span></div><div class="row"><span>RX OTHER</span><span id="rxo" class="v">--</span></div><div class="row"><span>TX OK/FAIL</span><span id="txc" class="v">--</span></div></div>
 <div class="box"><h3>// MOTOR</h3><div class="row"><span>CMD</span><span id="cmd" class="v">--</span></div><div class="row"><span>SET L/R</span><span id="set" class="v">--</span></div><div class="row"><span>FB L/R</span><span id="fb" class="v">--</span></div><div class="row"><span>EMG</span><span id="emg" class="v">--</span></div></div>
+<div class="box" id="emgbox"><h3>// EMERGENCY MONITOR</h3><div class="row"><span>STATE</span><span id="emgstate" class="v">--</span></div><div class="row"><span>SOURCE</span><span id="emgsrc" class="v">STM32 0x001</span></div><div class="row"><span>ACTION</span><span id="emgaction" class="v">--</span></div><div class="row"><span>STATUS BYTE</span><span id="emgbyte" class="v">--</span></div></div>
 <div class="box" id="gyrobox"><h3>// GYRO LOCAL</h3><div class="row"><span>MPU</span><span id="mpu" class="v">--</span></div><div class="row"><span>GX</span><span id="gx" class="v">--</span></div><div class="row"><span>GY</span><span id="gy" class="v">--</span></div><div class="row"><span>GZ</span><span id="gz" class="v">--</span></div><div class="row"><span>YAW</span><span id="yaw" class="v">--</span></div><button onclick="fetch('/zero_gyro')">ZERO YAW</button></div>
+<div class="box"><h3>// ANGLE CAN</h3><div class="row"><span>ID</span><span class="v">0x050</span></div><div class="row"><span>PERIOD</span><span id="angp" class="v">--</span></div><div class="row"><span>TX OK/FAIL</span><span id="angtx" class="v">--</span></div><div class="row"><span>SEQ</span><span id="angseq" class="v">--</span></div></div>
 <script>
 function send(c){const s=document.getElementById('spd').value;fetch('/cmd?c='+c+'&s='+s)}
-setInterval(()=>{fetch('/status').then(r=>r.json()).then(d=>{ok.textContent=d.ok?'OK':'TIMEOUT';age.textContent=d.age+' ms';twai.textContent=d.twai;err.textContent=d.txerr+'/'+d.rxerr;bus.textContent=d.buserr;rxs.textContent=d.rxs;rxo.textContent=d.rxo;txc.textContent=d.txok+'/'+d.txfail;cmd.textContent=d.cmd;set.textContent=d.sl+'/'+d.sr;fb.textContent=d.fl+'/'+d.fr;emg.textContent=d.emg;mpu.textContent=d.mpu?'OK':'ERR';gx.textContent=d.gx+' dps';gy.textContent=d.gy+' dps';gz.textContent=d.gz+' dps';yaw.textContent=d.yaw+' deg';canbox.className=d.ok?'box':'box bad';gyrobox.className=d.mpu?'box':'box bad';});},300);
+setInterval(()=>{fetch('/status').then(r=>r.json()).then(d=>{ok.textContent=d.ok?'OK':'TIMEOUT';age.textContent=d.age+' ms';twai.textContent=d.twai;err.textContent=d.txerr+'/'+d.rxerr;bus.textContent=d.buserr;rxs.textContent=d.rxs;rxo.textContent=d.rxo;txc.textContent=d.txok+'/'+d.txfail;cmd.textContent=d.cmd;set.textContent=d.sl+'/'+d.sr;fb.textContent=d.fl+'/'+d.fr;emg.textContent=d.emg;let e=(d.emg!=0);emgstate.textContent=e?'ACTIVE':'CLEAR';emgstate.className=e?'v red':'v green';emgaction.textContent=e?'STOP MOTOR':'ALLOW RUN';emgaction.className=e?'v red':'v green';emgbyte.textContent=d.emg;mpu.textContent=d.mpu?'OK':'ERR';gx.textContent=d.gx+' dps';gy.textContent=d.gy+' dps';gz.textContent=d.gz+' dps';yaw.textContent=d.yaw+' deg';angp.textContent=d.angleperiod+' ms';angtx.textContent=d.angleok+'/'+d.anglefail;angseq.textContent=d.angleseq;canbox.className=d.ok?'box':'box bad';emgbox.className=e?'box emg':'box';gyrobox.className=d.mpu?'box':'box bad';});},300);
 </script></body></html>
 )rawliteral";
 
@@ -370,6 +428,10 @@ static void handle_status(void) {
     json += ",\"gy\":" + String(gyro_y_dps, 2);
     json += ",\"gz\":" + String(gyro_z_dps, 2);
     json += ",\"yaw\":" + String(yaw_deg, 2);
+    json += ",\"angleperiod\":" + String(ANGLE_TX_PERIOD_MS);
+    json += ",\"angleok\":" + String(angle_tx_ok_count);
+    json += ",\"anglefail\":" + String(angle_tx_fail_count);
+    json += ",\"angleseq\":" + String(angle_seq);
     json += "}";
 
     server.send(200, "application/json", json);
@@ -401,7 +463,7 @@ void setup() {
     display.setCursor(0, 0);
     display.print("CAN web control");
     display.setCursor(0, 12);
-    display.print("Gyro local only");
+    display.print("Gyro CAN angle");
     display.display();
 
     can_setup();
@@ -428,6 +490,7 @@ void loop() {
     receive_feedback();
     update_twai_debug();
     update_gyro_if_due();
+    send_angle_if_due();
     send_current_command_if_due();
     update_oled_if_due();
     delay(1);
