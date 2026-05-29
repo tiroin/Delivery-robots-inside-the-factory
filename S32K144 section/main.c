@@ -26,6 +26,16 @@ volatile int exit_code = 0;
 // ----------------------------------------------------
 extern uint16_t target_L, target_R, current_L, current_R;
 
+
+// ----------------------------------------------------
+// IMU ANGLE PARAMETERS:
+// ----------------------------------------------------
+volatile int16_t imu_yaw_cdeg = 0;
+volatile int16_t imu_gz_cdps = 0;
+volatile uint8_t imu_angle_seq = 0U;
+volatile uint8_t imu_angle_valid = 0U;
+volatile uint32_t imu_angle_rx_count = 0U;
+
 // ----------------------------------------------------
 // TASK AND QUEUE PARAMETERS:
 // ----------------------------------------------------
@@ -61,6 +71,19 @@ static uint8_t parse_can_frame(const uint8_t *data, uint8_t dlc, MotorCmd_t *out
     // Clamp speed:
     if (out->speed_L > (uint16_t)MAX_SPEED_L) out->speed_L = MAX_SPEED_L;
     if (out->speed_R > (uint16_t)MAX_SPEED_R) out->speed_R = MAX_SPEED_R;
+    return 1U;
+}
+
+
+static uint8_t parse_angle_frame(const uint8_t *data, uint8_t dlc) {
+    if (dlc < CAN_DLC_ANGLE) return 0U;
+
+    imu_angle_seq = data[0];
+    imu_angle_valid = data[1] & 0x01U;
+    imu_yaw_cdeg = (int16_t)(((uint16_t)data[2] << 8) | data[3]);
+    imu_gz_cdps = (int16_t)(((uint16_t)data[4] << 8) | data[5]);
+    imu_angle_rx_count++;
+
     return 1U;
 }
 
@@ -118,6 +141,12 @@ void task_can_rx(void *pvParameters) {
             }
             FLEXCAN_DRV_Receive(INST_CAN, MB_RX_EMERGENCY, &rxData_emergency);
         }
+        // --- Angle message ---
+        if (FLEXCAN_DRV_GetTransferStatus(INST_CAN, MB_RX_ANGLE) == STATUS_SUCCESS) {
+            (void)parse_angle_frame(rxData_angle.data, rxData_angle.dataLen);
+            FLEXCAN_DRV_Receive(INST_CAN, MB_RX_ANGLE, &rxData_angle);
+        }
+
         // --- Control message ---
         if (FLEXCAN_DRV_GetTransferStatus(INST_CAN, MB_RX_CONTROL) == STATUS_SUCCESS) {
             MotorCmd_t motor_cmd;

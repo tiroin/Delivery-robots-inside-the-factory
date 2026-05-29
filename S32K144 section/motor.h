@@ -75,7 +75,7 @@
 // ----------------------------------------------------
 #define LEFT_HALL_PIN_A       	1U   // PTD1
 #define LEFT_HALL_PIN_B       	3U   // PTD3
-#define LEFT_HALL_PIN_C       	4U
+#define LEFT_HALL_PIN_C       	4U   // PTD4
 
 #define RIGHT_HALL_PIN_A      	2U   // PTD2
 #define RIGHT_HALL_PIN_B      	13U  // PTD13
