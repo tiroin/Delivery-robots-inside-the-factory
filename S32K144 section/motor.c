@@ -12,6 +12,16 @@ uint16_t current_L = 0, current_R = 0;
 // Direction:
 static uint8_t dir_left = 0, dir_right = 0;
 
+typedef enum {
+    MOTOR_MODE_STOP = 0,
+    MOTOR_MODE_FORWARD,
+    MOTOR_MODE_BACKWARD,
+    MOTOR_MODE_LEFT,
+    MOTOR_MODE_RIGHT
+} MotorMode_t;
+
+static MotorMode_t motor_mode = MOTOR_MODE_STOP;
+
 // Filter:
 static float filtered_L = 0.0f, filtered_R = 0.0f;
 
@@ -46,11 +56,30 @@ static uint16_t clamp_speed(uint16_t spd) {
     return spd;
 }
 
+static uint16_t scale_speed_percent(uint16_t spd, uint16_t percent) {
+    uint32_t val = ((uint32_t)spd * (uint32_t)percent) / 100U;
+    if (val > 0U && val < MIN_RUNNING_SPEED) val = MIN_RUNNING_SPEED;
+    if (val > MAX_SPEED_L) val = MAX_SPEED_L;
+    return (uint16_t)val;
+}
+
+static void set_motion_mode(MotorMode_t mode, uint8_t left_dir, uint8_t right_dir) {
+    if (motor_mode != mode || dir_left != left_dir || dir_right != right_dir) {
+        PID_Reset(&pid_L);
+        PID_Reset(&pid_R);
+        filtered_L = 0.0f;
+        filtered_R = 0.0f;
+        apply_direction(left_dir, right_dir);
+        motor_mode = mode;
+    }
+}
+
 // Initiate motor parameters:
 void motor_init(void) {
     apply_direction(0, 0);
     current_L = 0; current_R = 0;
     target_L  = 0; target_R  = 0;
+    motor_mode = MOTOR_MODE_STOP;
     set_speed_motors(0, 0);
     // PID initiate:
     PID_Init(&pid_L, PID_KP_L, PID_KI_L, PID_KD_L, -1.0f, 1.0f);
@@ -172,9 +201,7 @@ void update_motor_ramp(void) {
 
 // Moving forward:
 void move_forward(uint16_t speed) {
-    apply_direction(0, 0);
-    PID_Reset(&pid_L);
-    PID_Reset(&pid_R);
+    set_motion_mode(MOTOR_MODE_FORWARD, 0U, 0U);
     speed    = clamp_speed(speed);
     target_L = speed;
     target_R = speed;
@@ -182,40 +209,37 @@ void move_forward(uint16_t speed) {
 
 // Moving backward:
 void move_backward(uint16_t speed) {
-    apply_direction(1, 1);
-    PID_Reset(&pid_L);
-    PID_Reset(&pid_R);
+    set_motion_mode(MOTOR_MODE_BACKWARD, 1U, 1U);
     speed    = clamp_speed(speed);
     target_L = speed;
     target_R = speed;
 }
 
-// Turning left  (right wheel = outer / full speed, left wheel stops):
+// Turning left:
 void turn_left(uint16_t speed) {
-    apply_direction(0, 0);
-    PID_Reset(&pid_L);
-    PID_Reset(&pid_R);
+    set_motion_mode(MOTOR_MODE_LEFT, 0U, 0U);
     speed    = clamp_speed(speed);
-    target_L = TURN_INNER;
-    target_R = speed;
+    target_L = scale_speed_percent(speed, TURN_INNER_PERCENT);
+    target_R = scale_speed_percent(speed, TURN_OUTER_PERCENT);
 }
 
-// Turning right (left wheel = outer / full speed, right wheel stops):
+// Turning right:
 void turn_right(uint16_t speed) {
-    apply_direction(0, 0);
-    PID_Reset(&pid_L);
-    PID_Reset(&pid_R);
+    set_motion_mode(MOTOR_MODE_RIGHT, 0U, 0U);
     speed    = clamp_speed(speed);
-    target_L = speed;
-    target_R = TURN_INNER;
+    target_L = scale_speed_percent(speed, TURN_OUTER_PERCENT);
+    target_R = scale_speed_percent(speed, TURN_INNER_PERCENT);
 }
 
 // Stopping robot:
 void stop_robot(void) {
-    PID_Reset(&pid_L);
-    PID_Reset(&pid_R);
+    if (motor_mode != MOTOR_MODE_STOP) {
+        PID_Reset(&pid_L);
+        PID_Reset(&pid_R);
+        filtered_L = 0.0f;
+        filtered_R = 0.0f;
+        motor_mode = MOTOR_MODE_STOP;
+    }
     target_L   = 0U;
     target_R   = 0U;
-    filtered_L = 0.0f;
-    filtered_R = 0.0f;
 }

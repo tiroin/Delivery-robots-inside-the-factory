@@ -74,7 +74,6 @@ static uint8_t parse_can_frame(const uint8_t *data, uint8_t dlc, MotorCmd_t *out
     return 1U;
 }
 
-
 static uint8_t parse_angle_frame(const uint8_t *data, uint8_t dlc) {
     if (dlc < CAN_DLC_ANGLE) return 0U;
 
@@ -213,8 +212,8 @@ void task_motor_handle(void *pvParameters) {
         update_motor_ramp();
         // UART log:
         if (++log_divider >= 5) {
-            float actual_scaled_L = (actual_L_val / 6.0f) * MAX_SPEED_L;
-            float actual_scaled_R = (actual_R_val / 6.0f) * MAX_SPEED_R;
+            float actual_scaled_L = actual_L_val;
+            float actual_scaled_R = actual_R_val;
             float_to_str(str_L, actual_scaled_L);
             float_to_str(str_R, actual_scaled_R);
             sprintf(log_buf, "%u,%s,%u,%s\n", current_L, str_L, current_R, str_R);
@@ -230,7 +229,9 @@ void task_motor_handle(void *pvParameters) {
 void task_can_tx(void *pvParameters) {
     (void)pvParameters;
     for (;;) {
-        can_send_status(current_L, current_R, (uint8_t)emergency_flag);
+        uint16_t status_L = (actual_L_val > 0.0f) ? (uint16_t)(actual_L_val + 0.5f) : 0U;
+        uint16_t status_R = (actual_R_val > 0.0f) ? (uint16_t)(actual_R_val + 0.5f) : 0U;
+        can_send_status(status_L, status_R, (uint8_t)emergency_flag);
         vTaskDelay(pdMS_TO_TICKS(200));
     }
 }

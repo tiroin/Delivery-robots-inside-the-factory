@@ -31,20 +31,22 @@
 #define FTM_PERIOD          	20000U
 
 // Motor speed:
-#define MAX_SPEED_L           	250U
-#define MAX_SPEED_R				250U
+#define MAX_SPEED_L           	180U
+#define MAX_SPEED_R				180U
 #define MIN_RUNNING_SPEED   	70U
 
 // Turning speed:
-#define TURN_SPEED_L          	150U
-#define TURN_SPEED_R          	150U
+#define TURN_SPEED_L          	120U
+#define TURN_SPEED_R          	120U
 #define TURN_INNER          	70U
+#define TURN_INNER_PERCENT   	50U
+#define TURN_OUTER_PERCENT   	85U
 
 // ----------------------------------------------------
 // RAMP:
 // ----------------------------------------------------
-#define RAMP_STEP_L           	50U
-#define RAMP_STEP_R           	50U
+#define RAMP_STEP_L           	10U
+#define RAMP_STEP_R           	10U
 
 #define RAMP_DOWN_STEPS_L     	((MAX_SPEED_L + RAMP_STEP_L - 1) / RAMP_STEP_L)
 #define RAMP_DOWN_STEPS_R     	((MAX_SPEED_R + RAMP_STEP_R - 1) / RAMP_STEP_R)
