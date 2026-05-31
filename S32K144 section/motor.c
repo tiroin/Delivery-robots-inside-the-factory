@@ -39,6 +39,17 @@ extern volatile int16_t imu_yaw_cdeg;
 extern volatile int16_t imu_gz_cdps;
 extern volatile uint8_t imu_angle_valid;
 
+/*
+// Acceleration input placeholder.
+// This block is intentionally commented out until ESP32 sends these values.
+extern volatile int16_t imu_ax_mg;
+extern volatile int16_t imu_ay_mg;
+extern volatile int16_t imu_az_mg;
+extern volatile int16_t imu_pitch_cdeg;
+extern volatile int16_t imu_pitch_rate_cdps;
+extern volatile uint8_t imu_accel_valid;
+*/
+
 // PID instances:
 PID_t pid_L, pid_R, pid_yaw;
 
@@ -184,12 +195,38 @@ static int16_t compute_yaw_correction(void) {
 #endif
 }
 
+/*
+static int16_t compute_accel_slope_correction(void) {
+    if (imu_accel_valid == 0U) return 0;
+
+    float pitch_deg = ((float)imu_pitch_cdeg) * 0.01f;
+    float pitch_rate_dps = ((float)imu_pitch_rate_cdps) * 0.01f;
+
+    float corr_f = (ACCEL_KP * pitch_deg) + (ACCEL_KD * pitch_rate_dps);
+    corr_f *= (float)ACCEL_COMP_SIGN;
+
+    if (corr_f > (float)ACCEL_CORR_LIMIT) corr_f = (float)ACCEL_CORR_LIMIT;
+    if (corr_f < -(float)ACCEL_CORR_LIMIT) corr_f = -(float)ACCEL_CORR_LIMIT;
+
+    if (corr_f >= 0.0f) return (int16_t)(corr_f + 0.5f);
+    return (int16_t)(corr_f - 0.5f);
+}
+*/
+
 static void apply_yaw_hold_to_targets(void) {
     if (motor_mode == MOTOR_MODE_FORWARD) {
         int16_t corr = compute_yaw_correction();
         corr = clamp_i16(corr, (int16_t)-YAW_CORR_LIMIT, (int16_t)YAW_CORR_LIMIT);
         target_L = add_signed_to_speed(base_target_L, (int16_t)(-corr));
         target_R = add_signed_to_speed(base_target_R, corr);
+
+/*
+        // Future slope compensation example.
+        // Keep this disabled until acceleration or pitch data is verified by log.
+        int16_t slope_corr = compute_accel_slope_correction();
+        target_L = add_signed_to_speed(target_L, slope_corr);
+        target_R = add_signed_to_speed(target_R, slope_corr);
+*/
     } else if (motor_mode == MOTOR_MODE_BACKWARD) {
 #if YAW_HOLD_BACKWARD_ENABLE
         int16_t corr = compute_yaw_correction();

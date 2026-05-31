@@ -57,6 +57,29 @@
 #define YAW_CORR_LIMIT            8
 #define YAW_STARTUP_BLOCK_CYCLES  20U
 
+/*
+// ----------------------------------------------------
+// ACCELERATION / SLOPE COMPENSATION PLACEHOLDER:
+// ----------------------------------------------------
+// This block is intentionally commented out.
+// Use it later if ESP32 sends accelerometer or pitch data to S32K.
+// Suggested use:
+//   - yaw/gz keeps the robot going straight.
+//   - accel or pitch compensates slope/load when going uphill or downhill.
+
+#define ACCEL_COMP_ENABLE          0U
+#define ACCEL_COMP_SIGN            1
+#define ACCEL_KP                   0.00f
+#define ACCEL_KD                   0.00f
+#define ACCEL_CORR_LIMIT           10
+
+// Expected future units:
+// imu_ax_mg: acceleration X in milli-g.
+// imu_az_mg: acceleration Z in milli-g.
+// imu_pitch_cdeg: pitch angle in 0.01 degree.
+// imu_pitch_rate_cdps: pitch rate in 0.01 degree per second.
+*/
+
 // Wheel balance trims:
 #define SETPOINT_TRIM_L_PERCENT   96U
 #define SETPOINT_TRIM_R_PERCENT   106U
