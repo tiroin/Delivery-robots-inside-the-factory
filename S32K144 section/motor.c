@@ -291,8 +291,8 @@ void move_backward(uint16_t speed) {
 void turn_left(uint16_t speed) {
     set_motion_mode(MOTOR_MODE_LEFT, 0U, 0U);
     speed = clamp_speed(speed);
-    base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_INNER_PERCENT), SETPOINT_TRIM_L_PERCENT);
-    base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_OUTER_PERCENT), SETPOINT_TRIM_R_PERCENT);
+    base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_LEFT_INNER_PERCENT), SETPOINT_TRIM_L_PERCENT);
+    base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_LEFT_OUTER_PERCENT), SETPOINT_TRIM_R_PERCENT);
     target_L = base_target_L;
     target_R = base_target_R;
 }
@@ -301,8 +301,8 @@ void turn_left(uint16_t speed) {
 void turn_right(uint16_t speed) {
     set_motion_mode(MOTOR_MODE_RIGHT, 0U, 0U);
     speed = clamp_speed(speed);
-    base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_OUTER_PERCENT), SETPOINT_TRIM_L_PERCENT);
-    base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_INNER_PERCENT), SETPOINT_TRIM_R_PERCENT);
+    base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_RIGHT_OUTER_PERCENT), SETPOINT_TRIM_L_PERCENT);
+    base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_RIGHT_INNER_PERCENT), SETPOINT_TRIM_R_PERCENT);
     target_L = base_target_L;
     target_R = base_target_R;
 }

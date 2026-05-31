@@ -39,8 +39,12 @@
 #define TURN_SPEED_L          	120U
 #define TURN_SPEED_R          	120U
 #define TURN_INNER          	70U
-#define TURN_INNER_PERCENT   	55U
-#define TURN_OUTER_PERCENT   	95U
+#define TURN_INNER_PERCENT   	60U
+#define TURN_OUTER_PERCENT   	90U
+#define TURN_LEFT_INNER_PERCENT  68U
+#define TURN_LEFT_OUTER_PERCENT  90U
+#define TURN_RIGHT_INNER_PERCENT 68U
+#define TURN_RIGHT_OUTER_PERCENT 88U
 
 // Yaw hold outer loop:
 #define YAW_HOLD_ENABLE           1U
@@ -52,14 +56,14 @@
 
 
 // Wheel balance trims:
-#define SETPOINT_TRIM_L_PERCENT   85U
-#define SETPOINT_TRIM_R_PERCENT   115U
-#define DUTY_TRIM_L               0.85f
-#define DUTY_TRIM_R               1.15f
+#define SETPOINT_TRIM_L_PERCENT   90U
+#define SETPOINT_TRIM_R_PERCENT   105U
+#define DUTY_TRIM_L               0.90f
+#define DUTY_TRIM_R               1.05f
 
 // Per-wheel minimum duty:
 #define MIN_DUTY_L                0.06f
-#define MIN_DUTY_R                0.10f
+#define MIN_DUTY_R                0.095f
 
 // ----------------------------------------------------
 // RAMP:
