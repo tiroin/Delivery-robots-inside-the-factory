@@ -21,6 +21,8 @@ typedef enum {
 } MotorMode_t;
 
 static MotorMode_t motor_mode = MOTOR_MODE_STOP;
+static uint16_t base_target_L = 0U;
+static uint16_t base_target_R = 0U;
 
 // Filter:
 static float filtered_L = 0.0f, filtered_R = 0.0f;
@@ -32,6 +34,10 @@ volatile uint32_t pulse_count_R = 0;
 // Actual values:
 float actual_L_val = 0.0f;
 float actual_R_val = 0.0f;
+
+extern volatile int16_t imu_yaw_cdeg;
+extern volatile int16_t imu_gz_cdps;
+extern volatile uint8_t imu_angle_valid;
 
 // PID instances:
 PID_t pid_L, pid_R;
@@ -79,6 +85,7 @@ void motor_init(void) {
     apply_direction(0, 0);
     current_L = 0; current_R = 0;
     target_L  = 0; target_R  = 0;
+    base_target_L = 0U; base_target_R = 0U;
     motor_mode = MOTOR_MODE_STOP;
     set_speed_motors(0, 0);
     // PID initiate:
@@ -115,8 +122,70 @@ void Hall_Sensor_Handler(void) {
     }
 }
 
+static int16_t clamp_i16(int16_t val, int16_t min_val, int16_t max_val) {
+    if (val < min_val) return min_val;
+    if (val > max_val) return max_val;
+    return val;
+}
+
+static uint16_t add_signed_to_speed(uint16_t base, int16_t delta) {
+    int32_t val = (int32_t)base + (int32_t)delta;
+    if (val <= 0) return 0U;
+    if (val < (int32_t)MIN_RUNNING_SPEED) val = (int32_t)MIN_RUNNING_SPEED;
+    if (val > (int32_t)MAX_SPEED_L) val = (int32_t)MAX_SPEED_L;
+    return (uint16_t)val;
+}
+
+static float clamp_duty(float duty) {
+    if (duty > MAX_DUTY) duty = MAX_DUTY;
+    if (duty < 0.0f) duty = 0.0f;
+    return duty;
+}
+
+static int16_t compute_yaw_correction(void) {
+#if YAW_HOLD_ENABLE
+    if (imu_angle_valid == 0U) return 0;
+
+    float yaw_deg = ((float)imu_yaw_cdeg) * 0.01f;
+    float gz_dps  = ((float)imu_gz_cdps) * 0.01f;
+    float corr_f  = ((YAW_KP * yaw_deg) + (YAW_KD * gz_dps)) * (float)YAW_CORR_SIGN;
+
+    if (corr_f > (float)YAW_CORR_LIMIT) corr_f = (float)YAW_CORR_LIMIT;
+    if (corr_f < -(float)YAW_CORR_LIMIT) corr_f = -(float)YAW_CORR_LIMIT;
+
+    if (corr_f >= 0.0f) return (int16_t)(corr_f + 0.5f);
+    return (int16_t)(corr_f - 0.5f);
+#else
+    return 0;
+#endif
+}
+
+static void apply_yaw_hold_to_targets(void) {
+    if (motor_mode == MOTOR_MODE_FORWARD) {
+        int16_t corr = compute_yaw_correction();
+        corr = clamp_i16(corr, (int16_t)-YAW_CORR_LIMIT, (int16_t)YAW_CORR_LIMIT);
+        target_L = add_signed_to_speed(base_target_L, (int16_t)(-corr));
+        target_R = add_signed_to_speed(base_target_R, corr);
+    } else if (motor_mode == MOTOR_MODE_BACKWARD) {
+#if YAW_HOLD_BACKWARD_ENABLE
+        int16_t corr = compute_yaw_correction();
+        corr = clamp_i16(corr, (int16_t)-YAW_CORR_LIMIT, (int16_t)YAW_CORR_LIMIT);
+        target_L = add_signed_to_speed(base_target_L, corr);
+        target_R = add_signed_to_speed(base_target_R, (int16_t)(-corr));
+#else
+        target_L = base_target_L;
+        target_R = base_target_R;
+#endif
+    } else {
+        target_L = base_target_L;
+        target_R = base_target_R;
+    }
+}
+
 // Update motor:
 void update_motor_ramp(void) {
+    apply_yaw_hold_to_targets();
+
     // RAMP SETPOINT:
     // Left motor:
     if (current_L < target_L)
@@ -170,10 +239,11 @@ void update_motor_ramp(void) {
         duty_R = PID_Compute(&pid_R, (float)current_R, speed_R, PID_DT);
 
         // SATURATION + ANTI-WINDUP
-        if (duty_L > MAX_DUTY) duty_L = MAX_DUTY;
-        if (duty_L < MIN_DUTY && current_L > 0) duty_L = MIN_DUTY;
-        if (duty_R > MAX_DUTY) duty_R = MAX_DUTY;
-        if (duty_R < MIN_DUTY && current_R > 0) duty_R = MIN_DUTY;
+        duty_L = clamp_duty(duty_L * DUTY_TRIM_L);
+        duty_R = clamp_duty(duty_R * DUTY_TRIM_R);
+
+        if (duty_L < MIN_DUTY_L && current_L > 0) duty_L = MIN_DUTY_L;
+        if (duty_R < MIN_DUTY_R && current_R > 0) duty_R = MIN_DUTY_R;
         if (current_L == 0) { duty_L = 0.0f; PID_Reset(&pid_L); filtered_L = 0.0f; }
         if (current_R == 0) { duty_R = 0.0f; PID_Reset(&pid_R); filtered_R = 0.0f; }
 
@@ -202,33 +272,39 @@ void update_motor_ramp(void) {
 // Moving forward:
 void move_forward(uint16_t speed) {
     set_motion_mode(MOTOR_MODE_FORWARD, 0U, 0U);
-    speed    = clamp_speed(speed);
-    target_L = speed;
-    target_R = speed;
+    speed = clamp_speed(speed);
+    base_target_L = scale_speed_percent(speed, SETPOINT_TRIM_L_PERCENT);
+    base_target_R = scale_speed_percent(speed, SETPOINT_TRIM_R_PERCENT);
+    apply_yaw_hold_to_targets();
 }
 
 // Moving backward:
 void move_backward(uint16_t speed) {
     set_motion_mode(MOTOR_MODE_BACKWARD, 1U, 1U);
-    speed    = clamp_speed(speed);
-    target_L = speed;
-    target_R = speed;
+    speed = clamp_speed(speed);
+    base_target_L = scale_speed_percent(speed, SETPOINT_TRIM_L_PERCENT);
+    base_target_R = scale_speed_percent(speed, SETPOINT_TRIM_R_PERCENT);
+    apply_yaw_hold_to_targets();
 }
 
 // Turning left:
 void turn_left(uint16_t speed) {
     set_motion_mode(MOTOR_MODE_LEFT, 0U, 0U);
-    speed    = clamp_speed(speed);
-    target_L = scale_speed_percent(speed, TURN_INNER_PERCENT);
-    target_R = scale_speed_percent(speed, TURN_OUTER_PERCENT);
+    speed = clamp_speed(speed);
+    base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_INNER_PERCENT), SETPOINT_TRIM_L_PERCENT);
+    base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_OUTER_PERCENT), SETPOINT_TRIM_R_PERCENT);
+    target_L = base_target_L;
+    target_R = base_target_R;
 }
 
 // Turning right:
 void turn_right(uint16_t speed) {
     set_motion_mode(MOTOR_MODE_RIGHT, 0U, 0U);
-    speed    = clamp_speed(speed);
-    target_L = scale_speed_percent(speed, TURN_OUTER_PERCENT);
-    target_R = scale_speed_percent(speed, TURN_INNER_PERCENT);
+    speed = clamp_speed(speed);
+    base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_OUTER_PERCENT), SETPOINT_TRIM_L_PERCENT);
+    base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_INNER_PERCENT), SETPOINT_TRIM_R_PERCENT);
+    target_L = base_target_L;
+    target_R = base_target_R;
 }
 
 // Stopping robot:
@@ -240,6 +316,8 @@ void stop_robot(void) {
         filtered_R = 0.0f;
         motor_mode = MOTOR_MODE_STOP;
     }
-    target_L   = 0U;
-    target_R   = 0U;
+    base_target_L = 0U;
+    base_target_R = 0U;
+    target_L = 0U;
+    target_R = 0U;
 }

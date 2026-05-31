@@ -31,16 +31,35 @@
 #define FTM_PERIOD          	20000U
 
 // Motor speed:
-#define MAX_SPEED_L           	180U
-#define MAX_SPEED_R				180U
-#define MIN_RUNNING_SPEED   	70U
+#define MAX_SPEED_L           	170U
+#define MAX_SPEED_R				170U
+#define MIN_RUNNING_SPEED   	65U
 
 // Turning speed:
 #define TURN_SPEED_L          	120U
 #define TURN_SPEED_R          	120U
 #define TURN_INNER          	70U
-#define TURN_INNER_PERCENT   	50U
-#define TURN_OUTER_PERCENT   	85U
+#define TURN_INNER_PERCENT   	55U
+#define TURN_OUTER_PERCENT   	95U
+
+// Yaw hold outer loop:
+#define YAW_HOLD_ENABLE           1U
+#define YAW_HOLD_BACKWARD_ENABLE  0U
+#define YAW_CORR_SIGN             1
+#define YAW_KP                    1.00f
+#define YAW_KD                    0.04f
+#define YAW_CORR_LIMIT            20
+
+
+// Wheel balance trims:
+#define SETPOINT_TRIM_L_PERCENT   85U
+#define SETPOINT_TRIM_R_PERCENT   115U
+#define DUTY_TRIM_L               0.85f
+#define DUTY_TRIM_R               1.15f
+
+// Per-wheel minimum duty:
+#define MIN_DUTY_L                0.06f
+#define MIN_DUTY_R                0.10f
 
 // ----------------------------------------------------
 // RAMP:
