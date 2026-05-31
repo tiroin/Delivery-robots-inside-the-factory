@@ -15,6 +15,7 @@
 #include "queue.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 // ----------------------------------------------------
 // DEFAULT PARAMETER:
@@ -172,7 +173,7 @@ void task_motor_handle(void *pvParameters) {
     const TickType_t xFrequency = pdMS_TO_TICKS(20);
 
     // Parameters:
-    char log_buf[128];
+    char log_buf[192];
     char str_L[16], str_R[16];
     uint8_t log_divider = 0;
 
@@ -216,7 +217,12 @@ void task_motor_handle(void *pvParameters) {
             float actual_scaled_R = actual_R_val;
             float_to_str(str_L, actual_scaled_L);
             float_to_str(str_R, actual_scaled_R);
-            sprintf(log_buf, "%u,%s,%u,%s\n", current_L, str_L, current_R, str_R);
+            sprintf(log_buf, "M,%u,%s,%u,%s,A,%d,%d,%u,%u,%lu\n",
+                    current_L, str_L, current_R, str_R,
+                    (int)imu_yaw_cdeg, (int)imu_gz_cdps,
+                    (unsigned int)imu_angle_seq,
+                    (unsigned int)imu_angle_valid,
+                    (unsigned long)imu_angle_rx_count);
             uart_log(log_buf);
             log_divider = 0;
         }

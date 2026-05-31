@@ -50,32 +50,39 @@
 #define YAW_HOLD_ENABLE           1U
 #define YAW_HOLD_BACKWARD_ENABLE  0U
 #define YAW_CORR_SIGN             1
-#define YAW_KP                    1.00f
-#define YAW_KD                    0.04f
-#define YAW_CORR_LIMIT            20
-
+#define YAW_PID_KP                0.45f
+#define YAW_PID_KI                0.07f
+#define YAW_PID_KD                0.03f
+#define YAW_GZ_GAIN               0.010f
+#define YAW_CORR_LIMIT            8
+#define YAW_STARTUP_BLOCK_CYCLES  20U
 
 // Wheel balance trims:
-#define SETPOINT_TRIM_L_PERCENT   90U
-#define SETPOINT_TRIM_R_PERCENT   105U
-#define DUTY_TRIM_L               0.90f
-#define DUTY_TRIM_R               1.05f
+#define SETPOINT_TRIM_L_PERCENT   96U
+#define SETPOINT_TRIM_R_PERCENT   106U
+#define DUTY_TRIM_L               0.94f
+#define DUTY_TRIM_R               1.10f
 
 // Per-wheel minimum duty:
-#define MIN_DUTY_L                0.06f
-#define MIN_DUTY_R                0.095f
+#define MIN_DUTY_L                0.090f
+#define MIN_DUTY_R                0.120f
 
 // ----------------------------------------------------
 // RAMP:
 // ----------------------------------------------------
-#define RAMP_STEP_L           	10U
-#define RAMP_STEP_R           	10U
+#define RAMP_UP_STEP_L          13U
+#define RAMP_UP_STEP_R          15U
+#define RAMP_DOWN_STEP_L        16U
+#define RAMP_DOWN_STEP_R        15U
 
-#define RAMP_DOWN_STEPS_L     	((MAX_SPEED_L + RAMP_STEP_L - 1) / RAMP_STEP_L)
-#define RAMP_DOWN_STEPS_R     	((MAX_SPEED_R + RAMP_STEP_R - 1) / RAMP_STEP_R)
+#define RAMP_STEP_L             RAMP_UP_STEP_L
+#define RAMP_STEP_R             RAMP_UP_STEP_R
 
-#define RAMP_DOWN_STEPS_TURN_L 	((TURN_SPEED_L + RAMP_STEP_L - 1) / RAMP_STEP_L)
-#define RAMP_DOWN_STEPS_TURN_R 	((TURN_SPEED_R + RAMP_STEP_L - 1) / RAMP_STEP_R)
+#define RAMP_DOWN_STEPS_L       ((MAX_SPEED_L + RAMP_DOWN_STEP_L - 1U) / RAMP_DOWN_STEP_L)
+#define RAMP_DOWN_STEPS_R       ((MAX_SPEED_R + RAMP_DOWN_STEP_R - 1U) / RAMP_DOWN_STEP_R)
+
+#define RAMP_DOWN_STEPS_TURN_L  ((TURN_SPEED_L + RAMP_DOWN_STEP_L - 1U) / RAMP_DOWN_STEP_L)
+#define RAMP_DOWN_STEPS_TURN_R  ((TURN_SPEED_R + RAMP_DOWN_STEP_R - 1U) / RAMP_DOWN_STEP_R)
 
 // ----------------------------------------------------
 // GAIN:
@@ -138,6 +145,7 @@ extern float actual_R_val;
 // ----------------------------------------------------
 extern PID_t pid_L;
 extern PID_t pid_R;
+extern PID_t pid_yaw;
 
 // ----------------------------------------------------
 // SUPPORTED FUNCTIONS:

@@ -40,7 +40,10 @@ extern volatile int16_t imu_gz_cdps;
 extern volatile uint8_t imu_angle_valid;
 
 // PID instances:
-PID_t pid_L, pid_R;
+PID_t pid_L, pid_R, pid_yaw;
+
+static int16_t yaw_ref_cdeg = 0;
+static uint16_t yaw_startup_block = 0U;
 
 // ----------------------------------------------------
 // SUPPORTED FUNCTIONS:
@@ -73,10 +76,17 @@ static void set_motion_mode(MotorMode_t mode, uint8_t left_dir, uint8_t right_di
     if (motor_mode != mode || dir_left != left_dir || dir_right != right_dir) {
         PID_Reset(&pid_L);
         PID_Reset(&pid_R);
+        PID_Reset(&pid_yaw);
         filtered_L = 0.0f;
         filtered_R = 0.0f;
         apply_direction(left_dir, right_dir);
         motor_mode = mode;
+        if (mode == MOTOR_MODE_FORWARD) {
+            yaw_ref_cdeg = imu_yaw_cdeg;
+            yaw_startup_block = YAW_STARTUP_BLOCK_CYCLES;
+        } else {
+            yaw_startup_block = 0U;
+        }
     }
 }
 
@@ -91,6 +101,8 @@ void motor_init(void) {
     // PID initiate:
     PID_Init(&pid_L, PID_KP_L, PID_KI_L, PID_KD_L, -1.0f, 1.0f);
     PID_Init(&pid_R, PID_KP_R, PID_KI_R, PID_KD_R, -1.0f, 1.0f);
+    PID_Init(&pid_yaw, YAW_PID_KP, YAW_PID_KI, YAW_PID_KD, -(float)YAW_CORR_LIMIT, (float)YAW_CORR_LIMIT);
+    yaw_ref_cdeg = imu_yaw_cdeg;
 }
 
 // Set motor speed through PWM:
@@ -142,13 +154,25 @@ static float clamp_duty(float duty) {
     return duty;
 }
 
+static int16_t yaw_error_cdeg(int16_t ref_cdeg, int16_t now_cdeg) {
+    int32_t err = (int32_t)ref_cdeg - (int32_t)now_cdeg;
+    while (err > 18000) err -= 36000;
+    while (err < -18000) err += 36000;
+    return (int16_t)err;
+}
+
 static int16_t compute_yaw_correction(void) {
 #if YAW_HOLD_ENABLE
     if (imu_angle_valid == 0U) return 0;
+    if (yaw_startup_block > 0U) return 0;
 
-    float yaw_deg = ((float)imu_yaw_cdeg) * 0.01f;
-    float gz_dps  = ((float)imu_gz_cdps) * 0.01f;
-    float corr_f  = ((YAW_KP * yaw_deg) + (YAW_KD * gz_dps)) * (float)YAW_CORR_SIGN;
+    int16_t err_cdeg = yaw_error_cdeg(yaw_ref_cdeg, imu_yaw_cdeg);
+    float err_deg = ((float)err_cdeg) * 0.01f;
+    float gz_dps = ((float)imu_gz_cdps) * 0.01f;
+
+    float corr_f = PID_Compute(&pid_yaw, err_deg, 0.0f, PID_DT);
+    corr_f -= (YAW_GZ_GAIN * gz_dps);
+    corr_f *= (float)YAW_CORR_SIGN;
 
     if (corr_f > (float)YAW_CORR_LIMIT) corr_f = (float)YAW_CORR_LIMIT;
     if (corr_f < -(float)YAW_CORR_LIMIT) corr_f = -(float)YAW_CORR_LIMIT;
@@ -184,19 +208,22 @@ static void apply_yaw_hold_to_targets(void) {
 
 // Update motor:
 void update_motor_ramp(void) {
+    if (yaw_startup_block > 0U) {
+        yaw_startup_block--;
+    }
     apply_yaw_hold_to_targets();
 
     // RAMP SETPOINT:
     // Left motor:
     if (current_L < target_L)
-        current_L = (current_L + RAMP_STEP_L >= target_L) ? target_L : current_L + RAMP_STEP_L;
+        current_L = (current_L + RAMP_UP_STEP_L >= target_L) ? target_L : current_L + RAMP_UP_STEP_L;
     else if (current_L > target_L)
-        current_L = (current_L <= RAMP_STEP_L) ? 0 : current_L - RAMP_STEP_L;
+        current_L = (current_L <= RAMP_DOWN_STEP_L) ? 0 : current_L - RAMP_DOWN_STEP_L;
     // Right motor:
     if (current_R < target_R)
-        current_R = (current_R + RAMP_STEP_R >= target_R) ? target_R : current_R + RAMP_STEP_R;
+        current_R = (current_R + RAMP_UP_STEP_R >= target_R) ? target_R : current_R + RAMP_UP_STEP_R;
     else if (current_R > target_R)
-        current_R = (current_R <= RAMP_STEP_R) ? 0 : current_R - RAMP_STEP_R;
+        current_R = (current_R <= RAMP_DOWN_STEP_R) ? 0 : current_R - RAMP_DOWN_STEP_R;
 
     // READ SENSOR (HALL):
     static uint32_t acc_L = 0, acc_R = 0;
@@ -291,8 +318,9 @@ void move_backward(uint16_t speed) {
 void turn_left(uint16_t speed) {
     set_motion_mode(MOTOR_MODE_LEFT, 0U, 0U);
     speed = clamp_speed(speed);
-    base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_LEFT_INNER_PERCENT), SETPOINT_TRIM_L_PERCENT);
+//    base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_LEFT_INNER_PERCENT), SETPOINT_TRIM_L_PERCENT);
     base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_LEFT_OUTER_PERCENT), SETPOINT_TRIM_R_PERCENT);
+    base_target_L = 0;
     target_L = base_target_L;
     target_R = base_target_R;
 }
@@ -302,7 +330,8 @@ void turn_right(uint16_t speed) {
     set_motion_mode(MOTOR_MODE_RIGHT, 0U, 0U);
     speed = clamp_speed(speed);
     base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_RIGHT_OUTER_PERCENT), SETPOINT_TRIM_L_PERCENT);
-    base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_RIGHT_INNER_PERCENT), SETPOINT_TRIM_R_PERCENT);
+//    base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_RIGHT_INNER_PERCENT), SETPOINT_TRIM_R_PERCENT);
+    base_target_R = 0;
     target_L = base_target_L;
     target_R = base_target_R;
 }
@@ -312,6 +341,7 @@ void stop_robot(void) {
     if (motor_mode != MOTOR_MODE_STOP) {
         PID_Reset(&pid_L);
         PID_Reset(&pid_R);
+        PID_Reset(&pid_yaw);
         filtered_L = 0.0f;
         filtered_R = 0.0f;
         motor_mode = MOTOR_MODE_STOP;
