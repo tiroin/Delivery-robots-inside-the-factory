@@ -53,10 +53,24 @@
 #define YAW_HOLD_BACKWARD_ENABLE  0U
 #define YAW_CORR_SIGN             1
 
-// Set to 0 when the robot must return to the ESP32 zero yaw angle.
+// Set to 0 when STOP -> FORWARD must return to the ESP32 zero yaw angle.
 // Set to 1 only if every FORWARD command should use the current yaw as the new straight reference.
 #define YAW_REF_CAPTURE_ON_FORWARD 0U
 #define YAW_FIXED_REF_CDEG         0
+
+// Set to 1 so LEFT/RIGHT -> FORWARD captures the current yaw as the new straight heading.
+// This prevents the robot from trying to return to the old zero heading after a turn.
+#define YAW_REF_CAPTURE_AFTER_TURN 1U
+
+// LEFT/RIGHT -> FORWARD transition control.
+// The robot first balances the wheel setpoints and waits briefly, then captures a new yaw reference.
+#define TURN_TO_FORWARD_SETTLE_ENABLE     1U
+#define TURN_TO_FORWARD_SETTLE_CYCLES     14U
+#define TURN_TO_FORWARD_CAPTURE_DELAY     8U
+#define TURN_TO_FORWARD_GZ_STABLE_CDPS    120
+#define TURN_TO_FORWARD_BALANCE_MARGIN    4
+#define TURN_TO_FORWARD_CATCHUP_CORR      10
+#define TURN_TO_FORWARD_SLOWDOWN_CORR     8
 
 // Legacy PID values are kept for future use, but the current yaw correction uses the if/else curve below.
 #define YAW_PID_KP                0.58f
@@ -93,17 +107,6 @@
 // Increase this if the robot overshoots after correcting a large yaw error.
 // Decrease this if the correction feels too slow.
 #define YAW_IF_GZ_GAIN             0.015f
-
-// Command transition state.
-// This block makes FORWARD recover the yaw angle after LEFT or RIGHT.
-// Increase REALIGN_CORR_LIMIT or REALIGN_MIN_CORR if the robot is still weak after turning.
-// Decrease REALIGN_CORR_LIMIT or REALIGN_SLEW_STEP if it shakes after turning.
-#define YAW_TURN_TO_FORWARD_REALIGN_ENABLE  1U
-#define YAW_TURN_TO_FORWARD_REALIGN_CYCLES  35U
-#define YAW_REALIGN_CORR_LIMIT              18
-#define YAW_REALIGN_MIN_CORR                6
-#define YAW_REALIGN_SLEW_STEP               5
-#define YAW_REALIGN_EXIT_CDEG               80
 
 /*
 // ----------------------------------------------------
