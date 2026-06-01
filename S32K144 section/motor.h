@@ -44,24 +44,24 @@
 #define TURN_INNER_PERCENT   	60U
 #define TURN_OUTER_PERCENT   	90U
 #define TURN_LEFT_INNER_PERCENT  68U
-#define TURN_LEFT_OUTER_PERCENT  115U
+#define TURN_LEFT_OUTER_PERCENT  118U
 #define TURN_RIGHT_INNER_PERCENT 68U
-#define TURN_RIGHT_OUTER_PERCENT 74U
+#define TURN_RIGHT_OUTER_PERCENT 72U
 
 // Yaw hold outer loop:
 #define YAW_HOLD_ENABLE           1U
 #define YAW_HOLD_BACKWARD_ENABLE  0U
 #define YAW_CORR_SIGN             1
-#define YAW_PID_KP                0.68f
-#define YAW_PID_KI                0.001f
+#define YAW_PID_KP                0.58f
+#define YAW_PID_KI                0.000f
 #define YAW_PID_KD                0.000f
-#define YAW_GZ_GAIN               0.035f
-#define YAW_CORR_LIMIT            6
+#define YAW_GZ_GAIN               0.040f
+#define YAW_CORR_LIMIT            5
 #define YAW_STARTUP_BLOCK_CYCLES  0U
-#define FORWARD_START_BIAS         3
-#define FORWARD_START_BIAS_CYCLES  8U
-#define YAW_DEADBAND_CDEG          35
-#define YAW_CORR_SLEW_STEP         2
+#define FORWARD_START_BIAS         2
+#define FORWARD_START_BIAS_CYCLES  6U
+#define YAW_DEADBAND_CDEG          50
+#define YAW_CORR_SLEW_STEP         1
 
 /*
 // ----------------------------------------------------
@@ -121,7 +121,7 @@
 #define FF_HEADROOM  			1.0f
 #define SPEED_SCALE_L         	1.515f
 #define SPEED_SCALE_R         	1.250f
-#define SPEED_ALPHA 			0.3f
+#define SPEED_ALPHA 			0.25f
 
 // ----------------------------------------------------
 // DIR PINS:
