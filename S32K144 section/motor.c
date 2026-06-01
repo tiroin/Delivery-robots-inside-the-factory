@@ -21,6 +21,7 @@ typedef enum {
 } MotorMode_t;
 
 static MotorMode_t motor_mode = MOTOR_MODE_STOP;
+static MotorMode_t previous_motor_mode = MOTOR_MODE_STOP;
 static uint16_t base_target_L = 0U;
 static uint16_t base_target_R = 0U;
 
@@ -56,6 +57,7 @@ PID_t pid_L, pid_R, pid_yaw;
 static int16_t yaw_ref_cdeg = 0;
 static uint16_t yaw_startup_block = 0U;
 static uint16_t forward_start_bias_count = 0U;
+static uint16_t yaw_realign_count = 0U;
 static int16_t yaw_corr_last = 0;
 
 // ----------------------------------------------------
@@ -69,6 +71,12 @@ static void apply_direction(uint8_t left_dir, uint8_t right_dir) {
     else           PINS_DRV_ClearPins(LEFT_DIR_PORT, 1U << LEFT_DIR_PIN);
     if (right_dir) PINS_DRV_SetPins(RIGHT_DIR_PORT, 1U << RIGHT_DIR_PIN);
     else           PINS_DRV_ClearPins(RIGHT_DIR_PORT, 1U << RIGHT_DIR_PIN);
+}
+
+static uint8_t is_turn_mode(MotorMode_t mode) {
+    if (mode == MOTOR_MODE_LEFT) return 1U;
+    if (mode == MOTOR_MODE_RIGHT) return 1U;
+    return 0U;
 }
 
 // Clamp speed to valid range:
@@ -87,21 +95,41 @@ static uint16_t scale_speed_percent(uint16_t spd, uint16_t percent) {
 
 static void set_motion_mode(MotorMode_t mode, uint8_t left_dir, uint8_t right_dir) {
     if (motor_mode != mode || dir_left != left_dir || dir_right != right_dir) {
+        MotorMode_t old_mode = motor_mode;
+
         PID_Reset(&pid_L);
         PID_Reset(&pid_R);
         PID_Reset(&pid_yaw);
         filtered_L = 0.0f;
         filtered_R = 0.0f;
         apply_direction(left_dir, right_dir);
+
+        previous_motor_mode = old_mode;
         motor_mode = mode;
+
         if (mode == MOTOR_MODE_FORWARD) {
+#if YAW_REF_CAPTURE_ON_FORWARD
             yaw_ref_cdeg = imu_yaw_cdeg;
+#else
+            yaw_ref_cdeg = (int16_t)YAW_FIXED_REF_CDEG;
+#endif
             yaw_startup_block = YAW_STARTUP_BLOCK_CYCLES;
             forward_start_bias_count = FORWARD_START_BIAS_CYCLES;
+
+#if YAW_TURN_TO_FORWARD_REALIGN_ENABLE
+            if (is_turn_mode(previous_motor_mode) != 0U) {
+                yaw_realign_count = YAW_TURN_TO_FORWARD_REALIGN_CYCLES;
+            } else {
+                yaw_realign_count = 0U;
+            }
+#else
+            yaw_realign_count = 0U;
+#endif
             yaw_corr_last = 0;
         } else {
             yaw_startup_block = 0U;
             forward_start_bias_count = 0U;
+            yaw_realign_count = 0U;
             yaw_corr_last = 0;
         }
     }
@@ -114,12 +142,18 @@ void motor_init(void) {
     target_L  = 0; target_R  = 0;
     base_target_L = 0U; base_target_R = 0U;
     motor_mode = MOTOR_MODE_STOP;
+    previous_motor_mode = MOTOR_MODE_STOP;
     set_speed_motors(0, 0);
     // PID initiate:
     PID_Init(&pid_L, PID_KP_L, PID_KI_L, PID_KD_L, -1.0f, 1.0f);
     PID_Init(&pid_R, PID_KP_R, PID_KI_R, PID_KD_R, -1.0f, 1.0f);
     PID_Init(&pid_yaw, YAW_PID_KP, YAW_PID_KI, YAW_PID_KD, -(float)YAW_CORR_LIMIT, (float)YAW_CORR_LIMIT);
+#if YAW_REF_CAPTURE_ON_FORWARD
     yaw_ref_cdeg = imu_yaw_cdeg;
+#else
+    yaw_ref_cdeg = (int16_t)YAW_FIXED_REF_CDEG;
+#endif
+    yaw_realign_count = 0U;
     yaw_corr_last = 0;
 }
 
@@ -191,30 +225,96 @@ static int16_t compute_yaw_correction(void) {
     if (imu_angle_valid == 0U) return 0;
     if (yaw_startup_block > 0U) return 0;
 
-    int16_t err_cdeg = yaw_error_cdeg(yaw_ref_cdeg, imu_yaw_cdeg);
-    if (err_cdeg > -YAW_DEADBAND_CDEG && err_cdeg < YAW_DEADBAND_CDEG) {
-        err_cdeg = 0;
+    /*
+     * Angle error rule:
+     *   positive yaw error -> negative correction
+     *   negative yaw error -> positive correction
+     *
+     * Important tuning points:
+     *   YAW_IF_SMALL_CORR  : correction for small angle error.
+     *   YAW_IF_MEDIUM_CORR : correction for medium angle error.
+     *   YAW_IF_LARGE_CORR  : correction for large angle error.
+     *   YAW_IF_MAX_CORR    : correction for very large angle error.
+     *
+     * If compensation is still weak, increase these correction values first.
+     */
+    int16_t err_cdeg = yaw_error_cdeg(imu_yaw_cdeg, yaw_ref_cdeg);
+    int16_t abs_err = (err_cdeg < 0) ? (int16_t)(-err_cdeg) : err_cdeg;
+    int16_t corr_raw = 0;
+
+    if (abs_err <= (int16_t)YAW_DEADBAND_CDEG) {
+        corr_raw = 0;
+    } else if (abs_err <= (int16_t)YAW_IF_SMALL_CDEG) {
+        corr_raw = (int16_t)YAW_IF_SMALL_CORR;
+    } else if (abs_err <= (int16_t)YAW_IF_MEDIUM_CDEG) {
+        corr_raw = (int16_t)YAW_IF_MEDIUM_CORR;
+    } else if (abs_err <= (int16_t)YAW_IF_LARGE_CDEG) {
+        corr_raw = (int16_t)YAW_IF_LARGE_CORR;
+    } else {
+        corr_raw = (int16_t)YAW_IF_MAX_CORR;
     }
 
-    float err_deg = ((float)err_cdeg) * 0.01f;
+    if (err_cdeg > 0) {
+        // Positive yaw error needs negative correction.
+        corr_raw = (int16_t)(-((float)corr_raw * YAW_IF_POS_GAIN));
+    } else if (err_cdeg < 0) {
+        // Negative yaw error needs positive correction.
+        corr_raw = (int16_t)(((float)corr_raw * YAW_IF_NEG_GAIN));
+    } else {
+        corr_raw = 0;
+    }
+
+    /*
+     * Gyro damping.
+     * This opposes fast rotation so that the robot does not overshoot too much.
+     * If the correction is too weak, reduce YAW_IF_GZ_GAIN.
+     * If it overshoots, increase YAW_IF_GZ_GAIN slightly.
+     */
     float gz_dps = ((float)imu_gz_cdps) * 0.01f;
+    float gz_corr = YAW_IF_GZ_GAIN * gz_dps;
+    if (gz_corr >= 0.0f) corr_raw -= (int16_t)(gz_corr + 0.5f);
+    else corr_raw -= (int16_t)(gz_corr - 0.5f);
 
-    float corr_f = PID_Compute(&pid_yaw, err_deg, 0.0f, PID_DT);
-    corr_f -= (YAW_GZ_GAIN * gz_dps);
-    corr_f *= (float)YAW_CORR_SIGN;
+    corr_raw = (int16_t)((float)corr_raw * (float)YAW_CORR_SIGN);
 
-    if (corr_f > (float)YAW_CORR_LIMIT) corr_f = (float)YAW_CORR_LIMIT;
-    if (corr_f < -(float)YAW_CORR_LIMIT) corr_f = -(float)YAW_CORR_LIMIT;
+    /*
+     * Turn-to-forward realign state.
+     * This is active only after LEFT or RIGHT changes to FORWARD.
+     * It gives stronger yaw correction for a short time so that the robot can return to straight motion.
+     */
+    int16_t corr_limit = (int16_t)YAW_CORR_LIMIT;
+    int16_t slew_step = (int16_t)YAW_CORR_SLEW_STEP;
 
-    int16_t corr_raw;
-    if (corr_f >= 0.0f) corr_raw = (int16_t)(corr_f + 0.5f);
-    else corr_raw = (int16_t)(corr_f - 0.5f);
+#if YAW_TURN_TO_FORWARD_REALIGN_ENABLE
+    if (yaw_realign_count > 0U) {
+        corr_limit = (int16_t)YAW_REALIGN_CORR_LIMIT;
+        slew_step = (int16_t)YAW_REALIGN_SLEW_STEP;
 
+        if (abs_err <= (int16_t)YAW_REALIGN_EXIT_CDEG) {
+            yaw_realign_count = 0U;
+        } else if (corr_raw > 0 && corr_raw < (int16_t)YAW_REALIGN_MIN_CORR) {
+            corr_raw = (int16_t)YAW_REALIGN_MIN_CORR;
+        } else if (corr_raw < 0 && corr_raw > -(int16_t)YAW_REALIGN_MIN_CORR) {
+            corr_raw = (int16_t)(-YAW_REALIGN_MIN_CORR);
+        } else {
+            /* Keep the current correction. */
+        }
+    }
+#endif
+
+    corr_raw = clamp_i16(corr_raw, (int16_t)-corr_limit, corr_limit);
+
+    /*
+     * Slew limit.
+     * Increase YAW_CORR_SLEW_STEP if normal response is still too slow.
+     * Increase YAW_REALIGN_SLEW_STEP if response after turning is too slow.
+     * Decrease them if the robot shakes left and right.
+     */
     int16_t diff = (int16_t)(corr_raw - yaw_corr_last);
-    if (diff > (int16_t)YAW_CORR_SLEW_STEP) {
-        corr_raw = (int16_t)(yaw_corr_last + (int16_t)YAW_CORR_SLEW_STEP);
-    } else if (diff < -(int16_t)YAW_CORR_SLEW_STEP) {
-        corr_raw = (int16_t)(yaw_corr_last - (int16_t)YAW_CORR_SLEW_STEP);
+    if (diff > slew_step) {
+        corr_raw = (int16_t)(yaw_corr_last + slew_step);
+    } else if (diff < -slew_step) {
+        corr_raw = (int16_t)(yaw_corr_last - slew_step);
     }
 
     yaw_corr_last = corr_raw;
@@ -295,6 +395,9 @@ void update_motor_ramp(void) {
     }
     if (forward_start_bias_count > 0U) {
         forward_start_bias_count--;
+    }
+    if (yaw_realign_count > 0U) {
+        yaw_realign_count--;
     }
     apply_yaw_hold_to_targets();
 
@@ -428,6 +531,8 @@ void stop_robot(void) {
     }
     yaw_startup_block = 0U;
     forward_start_bias_count = 0U;
+    yaw_realign_count = 0U;
+    previous_motor_mode = motor_mode;
     yaw_corr_last = 0;
     base_target_L = 0U;
     base_target_R = 0U;

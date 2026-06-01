@@ -52,16 +52,58 @@
 #define YAW_HOLD_ENABLE           1U
 #define YAW_HOLD_BACKWARD_ENABLE  0U
 #define YAW_CORR_SIGN             1
+
+// Set to 0 when the robot must return to the ESP32 zero yaw angle.
+// Set to 1 only if every FORWARD command should use the current yaw as the new straight reference.
+#define YAW_REF_CAPTURE_ON_FORWARD 0U
+#define YAW_FIXED_REF_CDEG         0
+
+// Legacy PID values are kept for future use, but the current yaw correction uses the if/else curve below.
 #define YAW_PID_KP                0.58f
 #define YAW_PID_KI                0.000f
 #define YAW_PID_KD                0.000f
-#define YAW_GZ_GAIN               0.040f
-#define YAW_CORR_LIMIT            5
+#define YAW_GZ_GAIN               0.020f
+#define YAW_CORR_LIMIT            12
 #define YAW_STARTUP_BLOCK_CYCLES  0U
-#define FORWARD_START_BIAS         2
-#define FORWARD_START_BIAS_CYCLES  6U
-#define YAW_DEADBAND_CDEG          50
-#define YAW_CORR_SLEW_STEP         1
+#define FORWARD_START_BIAS         1
+#define FORWARD_START_BIAS_CYCLES  4U
+#define YAW_DEADBAND_CDEG          20
+#define YAW_CORR_SLEW_STEP         2
+
+// If/else yaw correction curve.
+// Positive yaw error produces negative correction.
+// Negative yaw error produces positive correction.
+// Increase these values if angle compensation is still weak.
+#define YAW_IF_SMALL_CDEG          100
+#define YAW_IF_MEDIUM_CDEG         200
+#define YAW_IF_LARGE_CDEG          400
+#define YAW_IF_SMALL_CORR          1
+#define YAW_IF_MEDIUM_CORR         5
+#define YAW_IF_LARGE_CORR          7
+#define YAW_IF_MAX_CORR            10
+
+// Asymmetric gain tuning.
+// Tune here if one direction is weaker than the other.
+// If positive yaw is weak, increase YAW_IF_POS_GAIN.
+// If negative yaw is weak, increase YAW_IF_NEG_GAIN.
+#define YAW_IF_POS_GAIN            1.20f
+#define YAW_IF_NEG_GAIN            1.00f
+
+// Gyro damping.
+// Increase this if the robot overshoots after correcting a large yaw error.
+// Decrease this if the correction feels too slow.
+#define YAW_IF_GZ_GAIN             0.015f
+
+// Command transition state.
+// This block makes FORWARD recover the yaw angle after LEFT or RIGHT.
+// Increase REALIGN_CORR_LIMIT or REALIGN_MIN_CORR if the robot is still weak after turning.
+// Decrease REALIGN_CORR_LIMIT or REALIGN_SLEW_STEP if it shakes after turning.
+#define YAW_TURN_TO_FORWARD_REALIGN_ENABLE  1U
+#define YAW_TURN_TO_FORWARD_REALIGN_CYCLES  35U
+#define YAW_REALIGN_CORR_LIMIT              18
+#define YAW_REALIGN_MIN_CORR                6
+#define YAW_REALIGN_SLEW_STEP               5
+#define YAW_REALIGN_EXIT_CDEG               80
 
 /*
 // ----------------------------------------------------
