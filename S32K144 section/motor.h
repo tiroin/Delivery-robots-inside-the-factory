@@ -25,7 +25,7 @@
 
 // Handle threshold:
 #define HANDLE_MIN_L        	1000U
-#define HANDLE_MAX_L        	8700U
+#define HANDLE_MAX_L        	8500U
 #define HANDLE_MIN_R        	1000U
 #define HANDLE_MAX_R        	9000U
 
@@ -44,20 +44,22 @@
 #define TURN_INNER_PERCENT   	60U
 #define TURN_OUTER_PERCENT   	90U
 #define TURN_LEFT_INNER_PERCENT  68U
-#define TURN_LEFT_OUTER_PERCENT  90U
+#define TURN_LEFT_OUTER_PERCENT  105U
 #define TURN_RIGHT_INNER_PERCENT 68U
-#define TURN_RIGHT_OUTER_PERCENT 88U
+#define TURN_RIGHT_OUTER_PERCENT 80U
 
 // Yaw hold outer loop:
 #define YAW_HOLD_ENABLE           1U
 #define YAW_HOLD_BACKWARD_ENABLE  0U
 #define YAW_CORR_SIGN             1
-#define YAW_PID_KP                0.65f
-#define YAW_PID_KI                0.005f
-#define YAW_PID_KD                0.001f
-#define YAW_GZ_GAIN               0.010f
+#define YAW_PID_KP                0.80f
+#define YAW_PID_KI                0.003f
+#define YAW_PID_KD                0.000f
+#define YAW_GZ_GAIN               0.030f
 #define YAW_CORR_LIMIT            8
-#define YAW_STARTUP_BLOCK_CYCLES  20U
+#define YAW_STARTUP_BLOCK_CYCLES  0U
+#define FORWARD_START_BIAS         4
+#define FORWARD_START_BIAS_CYCLES  10U
 
 /*
 // ----------------------------------------------------
@@ -83,20 +85,20 @@
 */
 
 // Wheel balance trims:
-#define SETPOINT_TRIM_L_PERCENT   98U
-#define SETPOINT_TRIM_R_PERCENT   102U
-#define DUTY_TRIM_L               0.98f
-#define DUTY_TRIM_R               1.03f
+#define SETPOINT_TRIM_L_PERCENT   96U
+#define SETPOINT_TRIM_R_PERCENT   104U
+#define DUTY_TRIM_L               0.95f
+#define DUTY_TRIM_R               1.05f
 
 // Per-wheel minimum duty:
-#define MIN_DUTY_L                0.095f
-#define MIN_DUTY_R                0.105f
+#define MIN_DUTY_L                0.090f
+#define MIN_DUTY_R                0.110f
 
 // ----------------------------------------------------
 // RAMP:
 // ----------------------------------------------------
-#define RAMP_UP_STEP_L          15U
-#define RAMP_UP_STEP_R          13U
+#define RAMP_UP_STEP_L          12U
+#define RAMP_UP_STEP_R          15U
 #define RAMP_DOWN_STEP_L        14U
 #define RAMP_DOWN_STEP_R        15U
 

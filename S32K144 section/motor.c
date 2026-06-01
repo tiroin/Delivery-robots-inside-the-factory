@@ -55,6 +55,7 @@ PID_t pid_L, pid_R, pid_yaw;
 
 static int16_t yaw_ref_cdeg = 0;
 static uint16_t yaw_startup_block = 0U;
+static uint16_t forward_start_bias_count = 0U;
 
 // ----------------------------------------------------
 // SUPPORTED FUNCTIONS:
@@ -95,8 +96,10 @@ static void set_motion_mode(MotorMode_t mode, uint8_t left_dir, uint8_t right_di
         if (mode == MOTOR_MODE_FORWARD) {
             yaw_ref_cdeg = imu_yaw_cdeg;
             yaw_startup_block = YAW_STARTUP_BLOCK_CYCLES;
+            forward_start_bias_count = FORWARD_START_BIAS_CYCLES;
         } else {
             yaw_startup_block = 0U;
+            forward_start_bias_count = 0U;
         }
     }
 }
@@ -227,6 +230,11 @@ static void apply_yaw_hold_to_targets(void) {
         target_L = add_signed_to_speed(base_target_L, (int16_t)(-corr));
         target_R = add_signed_to_speed(base_target_R, corr);
 
+        if (forward_start_bias_count > 0U) {
+            target_L = add_signed_to_speed(target_L, (int16_t)(-FORWARD_START_BIAS));
+            target_R = add_signed_to_speed(target_R, (int16_t)( FORWARD_START_BIAS));
+        }
+
 /*
         // Future slope compensation example.
         // Keep this disabled until acceleration or pitch data is verified by log.
@@ -254,6 +262,9 @@ static void apply_yaw_hold_to_targets(void) {
 void update_motor_ramp(void) {
     if (yaw_startup_block > 0U) {
         yaw_startup_block--;
+    }
+    if (forward_start_bias_count > 0U) {
+        forward_start_bias_count--;
     }
     apply_yaw_hold_to_targets();
 
@@ -385,6 +396,8 @@ void stop_robot(void) {
         filtered_R = 0.0f;
         motor_mode = MOTOR_MODE_STOP;
     }
+    yaw_startup_block = 0U;
+    forward_start_bias_count = 0U;
     base_target_L = 0U;
     base_target_R = 0U;
     target_L = 0U;
