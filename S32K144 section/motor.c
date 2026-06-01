@@ -56,6 +56,7 @@ PID_t pid_L, pid_R, pid_yaw;
 static int16_t yaw_ref_cdeg = 0;
 static uint16_t yaw_startup_block = 0U;
 static uint16_t forward_start_bias_count = 0U;
+static int16_t yaw_corr_last = 0;
 
 // ----------------------------------------------------
 // SUPPORTED FUNCTIONS:
@@ -97,9 +98,11 @@ static void set_motion_mode(MotorMode_t mode, uint8_t left_dir, uint8_t right_di
             yaw_ref_cdeg = imu_yaw_cdeg;
             yaw_startup_block = YAW_STARTUP_BLOCK_CYCLES;
             forward_start_bias_count = FORWARD_START_BIAS_CYCLES;
+            yaw_corr_last = 0;
         } else {
             yaw_startup_block = 0U;
             forward_start_bias_count = 0U;
+            yaw_corr_last = 0;
         }
     }
 }
@@ -117,6 +120,7 @@ void motor_init(void) {
     PID_Init(&pid_R, PID_KP_R, PID_KI_R, PID_KD_R, -1.0f, 1.0f);
     PID_Init(&pid_yaw, YAW_PID_KP, YAW_PID_KI, YAW_PID_KD, -(float)YAW_CORR_LIMIT, (float)YAW_CORR_LIMIT);
     yaw_ref_cdeg = imu_yaw_cdeg;
+    yaw_corr_last = 0;
 }
 
 // Set motor speed through PWM:
@@ -188,6 +192,10 @@ static int16_t compute_yaw_correction(void) {
     if (yaw_startup_block > 0U) return 0;
 
     int16_t err_cdeg = yaw_error_cdeg(yaw_ref_cdeg, imu_yaw_cdeg);
+    if (err_cdeg > -YAW_DEADBAND_CDEG && err_cdeg < YAW_DEADBAND_CDEG) {
+        err_cdeg = 0;
+    }
+
     float err_deg = ((float)err_cdeg) * 0.01f;
     float gz_dps = ((float)imu_gz_cdps) * 0.01f;
 
@@ -198,8 +206,19 @@ static int16_t compute_yaw_correction(void) {
     if (corr_f > (float)YAW_CORR_LIMIT) corr_f = (float)YAW_CORR_LIMIT;
     if (corr_f < -(float)YAW_CORR_LIMIT) corr_f = -(float)YAW_CORR_LIMIT;
 
-    if (corr_f >= 0.0f) return (int16_t)(corr_f + 0.5f);
-    return (int16_t)(corr_f - 0.5f);
+    int16_t corr_raw;
+    if (corr_f >= 0.0f) corr_raw = (int16_t)(corr_f + 0.5f);
+    else corr_raw = (int16_t)(corr_f - 0.5f);
+
+    int16_t diff = (int16_t)(corr_raw - yaw_corr_last);
+    if (diff > (int16_t)YAW_CORR_SLEW_STEP) {
+        corr_raw = (int16_t)(yaw_corr_last + (int16_t)YAW_CORR_SLEW_STEP);
+    } else if (diff < -(int16_t)YAW_CORR_SLEW_STEP) {
+        corr_raw = (int16_t)(yaw_corr_last - (int16_t)YAW_CORR_SLEW_STEP);
+    }
+
+    yaw_corr_last = corr_raw;
+    return corr_raw;
 #else
     return 0;
 #endif
@@ -218,8 +237,19 @@ static int16_t compute_accel_slope_correction(void) {
     if (corr_f > (float)ACCEL_CORR_LIMIT) corr_f = (float)ACCEL_CORR_LIMIT;
     if (corr_f < -(float)ACCEL_CORR_LIMIT) corr_f = -(float)ACCEL_CORR_LIMIT;
 
-    if (corr_f >= 0.0f) return (int16_t)(corr_f + 0.5f);
-    return (int16_t)(corr_f - 0.5f);
+    int16_t corr_raw;
+    if (corr_f >= 0.0f) corr_raw = (int16_t)(corr_f + 0.5f);
+    else corr_raw = (int16_t)(corr_f - 0.5f);
+
+    int16_t diff = (int16_t)(corr_raw - yaw_corr_last);
+    if (diff > (int16_t)YAW_CORR_SLEW_STEP) {
+        corr_raw = (int16_t)(yaw_corr_last + (int16_t)YAW_CORR_SLEW_STEP);
+    } else if (diff < -(int16_t)YAW_CORR_SLEW_STEP) {
+        corr_raw = (int16_t)(yaw_corr_last - (int16_t)YAW_CORR_SLEW_STEP);
+    }
+
+    yaw_corr_last = corr_raw;
+    return corr_raw;
 }
 */
 
@@ -398,6 +428,7 @@ void stop_robot(void) {
     }
     yaw_startup_block = 0U;
     forward_start_bias_count = 0U;
+    yaw_corr_last = 0;
     base_target_L = 0U;
     base_target_R = 0U;
     target_L = 0U;

@@ -44,22 +44,24 @@
 #define TURN_INNER_PERCENT   	60U
 #define TURN_OUTER_PERCENT   	90U
 #define TURN_LEFT_INNER_PERCENT  68U
-#define TURN_LEFT_OUTER_PERCENT  105U
+#define TURN_LEFT_OUTER_PERCENT  115U
 #define TURN_RIGHT_INNER_PERCENT 68U
-#define TURN_RIGHT_OUTER_PERCENT 80U
+#define TURN_RIGHT_OUTER_PERCENT 74U
 
 // Yaw hold outer loop:
 #define YAW_HOLD_ENABLE           1U
 #define YAW_HOLD_BACKWARD_ENABLE  0U
 #define YAW_CORR_SIGN             1
-#define YAW_PID_KP                0.80f
-#define YAW_PID_KI                0.003f
+#define YAW_PID_KP                0.68f
+#define YAW_PID_KI                0.001f
 #define YAW_PID_KD                0.000f
-#define YAW_GZ_GAIN               0.030f
-#define YAW_CORR_LIMIT            8
+#define YAW_GZ_GAIN               0.035f
+#define YAW_CORR_LIMIT            6
 #define YAW_STARTUP_BLOCK_CYCLES  0U
-#define FORWARD_START_BIAS         4
-#define FORWARD_START_BIAS_CYCLES  10U
+#define FORWARD_START_BIAS         3
+#define FORWARD_START_BIAS_CYCLES  8U
+#define YAW_DEADBAND_CDEG          35
+#define YAW_CORR_SLEW_STEP         2
 
 /*
 // ----------------------------------------------------
