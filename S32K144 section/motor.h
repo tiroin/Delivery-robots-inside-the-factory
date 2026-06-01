@@ -24,8 +24,10 @@
 #define RIGHT_MOTOR_PWM     	2U
 
 // Handle threshold:
-#define HANDLE_MIN          	1000U
-#define HANDLE_MAX          	10000U
+#define HANDLE_MIN_L        	1000U
+#define HANDLE_MAX_L        	8700U
+#define HANDLE_MIN_R        	1000U
+#define HANDLE_MAX_R        	9000U
 
 // Period:
 #define FTM_PERIOD          	20000U
@@ -50,9 +52,9 @@
 #define YAW_HOLD_ENABLE           1U
 #define YAW_HOLD_BACKWARD_ENABLE  0U
 #define YAW_CORR_SIGN             1
-#define YAW_PID_KP                0.45f
-#define YAW_PID_KI                0.07f
-#define YAW_PID_KD                0.03f
+#define YAW_PID_KP                0.65f
+#define YAW_PID_KI                0.005f
+#define YAW_PID_KD                0.001f
 #define YAW_GZ_GAIN               0.010f
 #define YAW_CORR_LIMIT            8
 #define YAW_STARTUP_BLOCK_CYCLES  20U
@@ -81,21 +83,21 @@
 */
 
 // Wheel balance trims:
-#define SETPOINT_TRIM_L_PERCENT   96U
-#define SETPOINT_TRIM_R_PERCENT   106U
-#define DUTY_TRIM_L               0.94f
-#define DUTY_TRIM_R               1.10f
+#define SETPOINT_TRIM_L_PERCENT   98U
+#define SETPOINT_TRIM_R_PERCENT   102U
+#define DUTY_TRIM_L               0.98f
+#define DUTY_TRIM_R               1.03f
 
 // Per-wheel minimum duty:
-#define MIN_DUTY_L                0.090f
-#define MIN_DUTY_R                0.120f
+#define MIN_DUTY_L                0.095f
+#define MIN_DUTY_R                0.105f
 
 // ----------------------------------------------------
 // RAMP:
 // ----------------------------------------------------
-#define RAMP_UP_STEP_L          13U
-#define RAMP_UP_STEP_R          15U
-#define RAMP_DOWN_STEP_L        16U
+#define RAMP_UP_STEP_L          15U
+#define RAMP_UP_STEP_R          13U
+#define RAMP_DOWN_STEP_L        14U
 #define RAMP_DOWN_STEP_R        15U
 
 #define RAMP_STEP_L             RAMP_UP_STEP_L

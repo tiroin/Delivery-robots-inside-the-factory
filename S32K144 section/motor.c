@@ -165,6 +165,13 @@ static float clamp_duty(float duty) {
     return duty;
 }
 
+static uint16_t duty_to_pwm(float duty, uint16_t handle_min, uint16_t handle_max) {
+    if (duty <= 0.0f) return 0U;
+    if (duty > MAX_DUTY) duty = MAX_DUTY;
+    if (handle_max <= handle_min) return handle_min;
+    return (uint16_t)((uint32_t)handle_min + (uint32_t)(duty * (float)(handle_max - handle_min)));
+}
+
 static int16_t yaw_error_cdeg(int16_t ref_cdeg, int16_t now_cdeg) {
     int32_t err = (int32_t)ref_cdeg - (int32_t)now_cdeg;
     while (err > 18000) err -= 36000;
@@ -312,13 +319,8 @@ void update_motor_ramp(void) {
         if (current_R == 0) { duty_R = 0.0f; PID_Reset(&pid_R); filtered_R = 0.0f; }
 
         // PWM OUTPUT
-        uint16_t pwm_L = 0, pwm_R = 0;
-        if (duty_L > 0) {
-            pwm_L = HANDLE_MIN + (uint16_t)(duty_L * (HANDLE_MAX - HANDLE_MIN));
-        }
-        if (duty_R > 0) {
-            pwm_R = HANDLE_MIN + (uint16_t)(duty_R * (HANDLE_MAX - HANDLE_MIN));
-        }
+        uint16_t pwm_L = duty_to_pwm(duty_L, HANDLE_MIN_L, HANDLE_MAX_L);
+        uint16_t pwm_R = duty_to_pwm(duty_R, HANDLE_MIN_R, HANDLE_MAX_R);
 
         // SET PWM TO BOTH MOTORS:
         set_speed_motors(pwm_L, pwm_R);
