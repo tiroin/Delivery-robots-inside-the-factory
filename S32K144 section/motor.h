@@ -25,7 +25,7 @@
 
 // Handle threshold:
 #define HANDLE_MIN_L        	1000U
-#define HANDLE_MAX_L        	8500U
+#define HANDLE_MAX_L        	8600U
 #define HANDLE_MIN_R        	1000U
 #define HANDLE_MAX_R        	9000U
 
@@ -38,21 +38,15 @@
 #define MIN_RUNNING_SPEED   	65U
 
 // Turning speed:
-#define TURN_SPEED_L          	120U
-#define TURN_SPEED_R          	120U
+#define TURN_SPEED_L          	140U
+#define TURN_SPEED_R          	140U
 #define TURN_INNER          	70U
 #define TURN_INNER_PERCENT   	60U
 #define TURN_OUTER_PERCENT   	90U
-// Direction-specific turn tuning.
-// Observed behaviour: RIGHT turn is stronger than LEFT turn.
-// LEFT turn therefore uses a small reverse inner wheel to help it rotate,
-// while RIGHT turn keeps the inner wheel moving forward to soften the turn.
-#define TURN_LEFT_USE_REVERSE_INNER   1U
-#define TURN_RIGHT_USE_REVERSE_INNER  0U
-#define TURN_LEFT_INNER_PERCENT       52U
-#define TURN_LEFT_OUTER_PERCENT       145U
-#define TURN_RIGHT_INNER_PERCENT      45U
-#define TURN_RIGHT_OUTER_PERCENT      68U
+#define TURN_LEFT_INNER_PERCENT  35U
+#define TURN_LEFT_OUTER_PERCENT  170U
+#define TURN_RIGHT_INNER_PERCENT 35U
+#define TURN_RIGHT_OUTER_PERCENT 145U
 
 // Yaw hold outer loop:
 #define YAW_HOLD_ENABLE           1U
@@ -71,41 +65,30 @@
 // LEFT/RIGHT -> FORWARD transition control.
 // The robot first balances the wheel setpoints and waits briefly, then captures a new yaw reference.
 #define TURN_TO_FORWARD_SETTLE_ENABLE     1U
-// LEFT -> FORWARD needs a stronger release because the robot keeps the left-turn arc.
-// RIGHT -> FORWARD was already acceptable, so keep it gentler.
-#define TURN_TO_FORWARD_SETTLE_CYCLES       14U
-#define TURN_LEFT_TO_FORWARD_SETTLE_CYCLES  48U
-#define TURN_RIGHT_TO_FORWARD_SETTLE_CYCLES 14U
-#define TURN_TO_FORWARD_CAPTURE_DELAY       8U
-#define TURN_TO_FORWARD_GZ_STABLE_CDPS      120
-#define TURN_TO_FORWARD_BALANCE_MARGIN      4
-#define TURN_TO_FORWARD_CATCHUP_CORR        10
-#define TURN_TO_FORWARD_SLOWDOWN_CORR       8
-#define TURN_LEFT_TO_FORWARD_CATCHUP_CORR   70
-#define TURN_LEFT_TO_FORWARD_SLOWDOWN_CORR  60
-#define TURN_RIGHT_TO_FORWARD_CATCHUP_CORR  18
-#define TURN_RIGHT_TO_FORWARD_SLOWDOWN_CORR 14
-
-// Extra LEFT -> FORWARD release stage.
-// When LEFT turn used reverse inner wheel, the robot may keep the left arc if FORWARD is pressed immediately.
-// During the first cycles, force the left wheel high and the right wheel low to cancel the remaining left rotation.
-#define TURN_LEFT_TO_FORWARD_HARD_RELEASE_CYCLES  18U
-#define TURN_LEFT_TO_FORWARD_HARD_L_TARGET        MAX_SPEED_L
-#define TURN_LEFT_TO_FORWARD_HARD_R_TARGET        MIN_RUNNING_SPEED
-#define TURN_TO_FORWARD_CAPTURE_STABLE_CYCLES     4U
-#define TURN_TO_FORWARD_CAPTURE_TIMEOUT_CYCLES    60U
+#define TURN_TO_FORWARD_SETTLE_CYCLES     14U
+#define TURN_TO_FORWARD_CAPTURE_DELAY     8U
+#define TURN_TO_FORWARD_GZ_STABLE_CDPS    120
+#define TURN_TO_FORWARD_BALANCE_MARGIN    4
+#define TURN_TO_FORWARD_CATCHUP_CORR      10
+#define TURN_TO_FORWARD_SLOWDOWN_CORR     8
 
 // Legacy PID values are kept for future use, but the current yaw correction uses the if/else curve below.
-#define YAW_PID_KP                0.58f
-#define YAW_PID_KI                0.000f
+#define YAW_PID_KP                1.02f
+#define YAW_PID_KI                0.02f
 #define YAW_PID_KD                0.000f
-#define YAW_GZ_GAIN               0.020f
-#define YAW_CORR_LIMIT            20
+#define YAW_GZ_GAIN               0.025f
+#define YAW_CORR_LIMIT            12
 #define YAW_STARTUP_BLOCK_CYCLES  0U
 #define FORWARD_START_BIAS         0
 #define FORWARD_START_BIAS_CYCLES  4U
-#define YAW_DEADBAND_CDEG          12
-#define YAW_CORR_SLEW_STEP         4
+
+// Straight-line mechanical drift trim only for FORWARD.
+// Positive value fixes right drift: target_L -= corr, target_R += corr.
+// If the robot drifts left, reduce this value or make it negative.
+#define FORWARD_RIGHT_DRIFT_CORR   8
+
+#define YAW_DEADBAND_CDEG          20
+#define YAW_CORR_SLEW_STEP         2
 
 // If/else yaw correction curve.
 // Positive yaw error produces negative correction.
@@ -114,17 +97,17 @@
 #define YAW_IF_SMALL_CDEG          100
 #define YAW_IF_MEDIUM_CDEG         200
 #define YAW_IF_LARGE_CDEG          400
-#define YAW_IF_SMALL_CORR          3
-#define YAW_IF_MEDIUM_CORR         7
-#define YAW_IF_LARGE_CORR          11
-#define YAW_IF_MAX_CORR            16
+#define YAW_IF_SMALL_CORR          1
+#define YAW_IF_MEDIUM_CORR         5
+#define YAW_IF_LARGE_CORR          7
+#define YAW_IF_MAX_CORR            10
 
 // Asymmetric gain tuning.
 // Tune here if one direction is weaker than the other.
 // If positive yaw is weak, increase YAW_IF_POS_GAIN.
 // If negative yaw is weak, increase YAW_IF_NEG_GAIN.
 #define YAW_IF_POS_GAIN            1.20f
-#define YAW_IF_NEG_GAIN            1.15f
+#define YAW_IF_NEG_GAIN            1.00f
 
 // Gyro damping.
 // Increase this if the robot overshoots after correcting a large yaw error.
@@ -155,22 +138,22 @@
 */
 
 // Wheel balance trims:
-#define SETPOINT_TRIM_L_PERCENT   96U
-#define SETPOINT_TRIM_R_PERCENT   104U
-#define DUTY_TRIM_L               0.95f
-#define DUTY_TRIM_R               1.05f
+#define SETPOINT_TRIM_L_PERCENT   100U
+#define SETPOINT_TRIM_R_PERCENT   100U
+#define DUTY_TRIM_L               1.00f
+#define DUTY_TRIM_R               1.00f
 
 // Per-wheel minimum duty:
-#define MIN_DUTY_L                0.090f
-#define MIN_DUTY_R                0.110f
+#define MIN_DUTY_L                0.100f
+#define MIN_DUTY_R                0.100f
 
 // ----------------------------------------------------
 // RAMP:
 // ----------------------------------------------------
-#define RAMP_UP_STEP_L          12U
-#define RAMP_UP_STEP_R          15U
+#define RAMP_UP_STEP_L          16U
+#define RAMP_UP_STEP_R          14U
 #define RAMP_DOWN_STEP_L        14U
-#define RAMP_DOWN_STEP_R        15U
+#define RAMP_DOWN_STEP_R        16U
 
 #define RAMP_STEP_L             RAMP_UP_STEP_L
 #define RAMP_STEP_R             RAMP_UP_STEP_R
@@ -190,6 +173,24 @@
 #define SPEED_SCALE_L         	1.515f
 #define SPEED_SCALE_R         	1.250f
 #define SPEED_ALPHA 			0.25f
+/*
+ * Forward wheel-speed synchronizer.
+ * Yaw hold corrects heading angle, but this block corrects actual wheel feedback mismatch.
+ *
+ * Rule:
+ *   actual_R > actual_L  -> increase L target, decrease R target.
+ *   actual_L > actual_R  -> increase R target, decrease L target.
+ */
+#define WHEEL_SYNC_ENABLE          1U
+#define WHEEL_SYNC_MIN_FB          8.0f
+#define WHEEL_SYNC_DEADBAND        3.0f
+#define WHEEL_SYNC_KP              0.45f
+#define WHEEL_SYNC_CORR_LIMIT      22
+
+// Use these with debug values to distinguish hardware from software.
+#define WHEEL_FB_FAULT_MIN_FAST    25.0f
+#define WHEEL_FB_FAULT_RATIO       5.0f
+
 
 // ----------------------------------------------------
 // DIR PINS:
@@ -227,6 +228,13 @@ extern volatile uint32_t pulse_count_R;
 extern float actual_L_val;
 extern float actual_R_val;
 
+// Debug values for the phone/serial monitor:
+extern uint16_t pwm_out_L;
+extern uint16_t pwm_out_R;
+extern uint32_t last_snap_L;
+extern uint32_t last_snap_R;
+extern int16_t wheel_sync_corr;
+
 // ----------------------------------------------------
 // DUTY:
 // ----------------------------------------------------
@@ -260,8 +268,8 @@ uint8_t motors_stopped   	(void);
 // Movement commands: all accept a target speed [MIN_RUNNING_SPEED, MAX_SPEED_L]:
 void    move_forward     	(uint16_t speed);   // both wheels forward at speed
 void    move_backward    	(uint16_t speed);   // both wheels backward at speed
-void    turn_left        	(uint16_t speed);   // left turn, tuned for stronger/smoother recovery
-void    turn_right       	(uint16_t speed);   // right turn, softened to match left turn
+void    turn_left         	(uint16_t speed);   // left wheel slow, right wheel fast
+void    turn_right        	(uint16_t speed);   // left wheel fast, right wheel slow
 void    stop_robot       	(void);             // both wheels stop
 
 // Hall sensor handler:
