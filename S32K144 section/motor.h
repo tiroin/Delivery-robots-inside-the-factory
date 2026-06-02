@@ -43,10 +43,16 @@
 #define TURN_INNER          	70U
 #define TURN_INNER_PERCENT   	60U
 #define TURN_OUTER_PERCENT   	90U
-#define TURN_LEFT_INNER_PERCENT  68U
-#define TURN_LEFT_OUTER_PERCENT  118U
-#define TURN_RIGHT_INNER_PERCENT 68U
-#define TURN_RIGHT_OUTER_PERCENT 72U
+// Direction-specific turn tuning.
+// Observed behaviour: RIGHT turn is stronger than LEFT turn.
+// LEFT turn therefore uses a small reverse inner wheel to help it rotate,
+// while RIGHT turn keeps the inner wheel moving forward to soften the turn.
+#define TURN_LEFT_USE_REVERSE_INNER   1U
+#define TURN_RIGHT_USE_REVERSE_INNER  0U
+#define TURN_LEFT_INNER_PERCENT       52U
+#define TURN_LEFT_OUTER_PERCENT       145U
+#define TURN_RIGHT_INNER_PERCENT      45U
+#define TURN_RIGHT_OUTER_PERCENT      68U
 
 // Yaw hold outer loop:
 #define YAW_HOLD_ENABLE           1U
@@ -65,24 +71,41 @@
 // LEFT/RIGHT -> FORWARD transition control.
 // The robot first balances the wheel setpoints and waits briefly, then captures a new yaw reference.
 #define TURN_TO_FORWARD_SETTLE_ENABLE     1U
-#define TURN_TO_FORWARD_SETTLE_CYCLES     14U
-#define TURN_TO_FORWARD_CAPTURE_DELAY     8U
-#define TURN_TO_FORWARD_GZ_STABLE_CDPS    120
-#define TURN_TO_FORWARD_BALANCE_MARGIN    4
-#define TURN_TO_FORWARD_CATCHUP_CORR      10
-#define TURN_TO_FORWARD_SLOWDOWN_CORR     8
+// LEFT -> FORWARD needs a stronger release because the robot keeps the left-turn arc.
+// RIGHT -> FORWARD was already acceptable, so keep it gentler.
+#define TURN_TO_FORWARD_SETTLE_CYCLES       14U
+#define TURN_LEFT_TO_FORWARD_SETTLE_CYCLES  48U
+#define TURN_RIGHT_TO_FORWARD_SETTLE_CYCLES 14U
+#define TURN_TO_FORWARD_CAPTURE_DELAY       8U
+#define TURN_TO_FORWARD_GZ_STABLE_CDPS      120
+#define TURN_TO_FORWARD_BALANCE_MARGIN      4
+#define TURN_TO_FORWARD_CATCHUP_CORR        10
+#define TURN_TO_FORWARD_SLOWDOWN_CORR       8
+#define TURN_LEFT_TO_FORWARD_CATCHUP_CORR   70
+#define TURN_LEFT_TO_FORWARD_SLOWDOWN_CORR  60
+#define TURN_RIGHT_TO_FORWARD_CATCHUP_CORR  18
+#define TURN_RIGHT_TO_FORWARD_SLOWDOWN_CORR 14
+
+// Extra LEFT -> FORWARD release stage.
+// When LEFT turn used reverse inner wheel, the robot may keep the left arc if FORWARD is pressed immediately.
+// During the first cycles, force the left wheel high and the right wheel low to cancel the remaining left rotation.
+#define TURN_LEFT_TO_FORWARD_HARD_RELEASE_CYCLES  18U
+#define TURN_LEFT_TO_FORWARD_HARD_L_TARGET        MAX_SPEED_L
+#define TURN_LEFT_TO_FORWARD_HARD_R_TARGET        MIN_RUNNING_SPEED
+#define TURN_TO_FORWARD_CAPTURE_STABLE_CYCLES     4U
+#define TURN_TO_FORWARD_CAPTURE_TIMEOUT_CYCLES    60U
 
 // Legacy PID values are kept for future use, but the current yaw correction uses the if/else curve below.
 #define YAW_PID_KP                0.58f
 #define YAW_PID_KI                0.000f
 #define YAW_PID_KD                0.000f
 #define YAW_GZ_GAIN               0.020f
-#define YAW_CORR_LIMIT            12
+#define YAW_CORR_LIMIT            20
 #define YAW_STARTUP_BLOCK_CYCLES  0U
-#define FORWARD_START_BIAS         1
+#define FORWARD_START_BIAS         0
 #define FORWARD_START_BIAS_CYCLES  4U
-#define YAW_DEADBAND_CDEG          20
-#define YAW_CORR_SLEW_STEP         2
+#define YAW_DEADBAND_CDEG          12
+#define YAW_CORR_SLEW_STEP         4
 
 // If/else yaw correction curve.
 // Positive yaw error produces negative correction.
@@ -91,17 +114,17 @@
 #define YAW_IF_SMALL_CDEG          100
 #define YAW_IF_MEDIUM_CDEG         200
 #define YAW_IF_LARGE_CDEG          400
-#define YAW_IF_SMALL_CORR          1
-#define YAW_IF_MEDIUM_CORR         5
-#define YAW_IF_LARGE_CORR          7
-#define YAW_IF_MAX_CORR            10
+#define YAW_IF_SMALL_CORR          3
+#define YAW_IF_MEDIUM_CORR         7
+#define YAW_IF_LARGE_CORR          11
+#define YAW_IF_MAX_CORR            16
 
 // Asymmetric gain tuning.
 // Tune here if one direction is weaker than the other.
 // If positive yaw is weak, increase YAW_IF_POS_GAIN.
 // If negative yaw is weak, increase YAW_IF_NEG_GAIN.
 #define YAW_IF_POS_GAIN            1.20f
-#define YAW_IF_NEG_GAIN            1.00f
+#define YAW_IF_NEG_GAIN            1.15f
 
 // Gyro damping.
 // Increase this if the robot overshoots after correcting a large yaw error.
@@ -237,8 +260,8 @@ uint8_t motors_stopped   	(void);
 // Movement commands: all accept a target speed [MIN_RUNNING_SPEED, MAX_SPEED_L]:
 void    move_forward     	(uint16_t speed);   // both wheels forward at speed
 void    move_backward    	(uint16_t speed);   // both wheels backward at speed
-void    turn_left        	(uint16_t speed);   // right wheel at speed, left stops
-void    turn_right       	(uint16_t speed);   // left wheel at speed, right stops
+void    turn_left        	(uint16_t speed);   // left turn, tuned for stronger/smoother recovery
+void    turn_right       	(uint16_t speed);   // right turn, softened to match left turn
 void    stop_robot       	(void);             // both wheels stop
 
 // Hall sensor handler:

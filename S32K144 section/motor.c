@@ -57,9 +57,14 @@ static int16_t yaw_ref_cdeg = 0;
 static uint16_t yaw_startup_block = 0U;
 static uint16_t forward_start_bias_count = 0U;
 static uint16_t turn_to_forward_settle_count = 0U;
+static MotorMode_t turn_to_forward_from = MOTOR_MODE_STOP;
 static uint16_t yaw_ref_capture_delay_count = 0U;
 static uint8_t yaw_ref_capture_pending = 0U;
+static uint16_t yaw_ref_capture_stable_count = 0U;
+static uint16_t yaw_ref_capture_timeout_count = 0U;
 static int16_t yaw_corr_last = 0;
+
+static int16_t abs_i16(int16_t val);
 
 // ----------------------------------------------------
 // SUPPORTED FUNCTIONS:
@@ -104,6 +109,8 @@ static void set_yaw_reference_for_forward(MotorMode_t previous_mode) {
 #if TURN_TO_FORWARD_SETTLE_ENABLE
         yaw_ref_capture_pending = 1U;
         yaw_ref_capture_delay_count = TURN_TO_FORWARD_CAPTURE_DELAY;
+        yaw_ref_capture_stable_count = 0U;
+        yaw_ref_capture_timeout_count = TURN_TO_FORWARD_CAPTURE_TIMEOUT_CYCLES;
 #else
         capture_yaw_reference_now();
 #endif
@@ -118,6 +125,8 @@ static void set_yaw_reference_for_forward(MotorMode_t previous_mode) {
 #endif
     yaw_ref_capture_pending = 0U;
     yaw_ref_capture_delay_count = 0U;
+    yaw_ref_capture_stable_count = 0U;
+    yaw_ref_capture_timeout_count = 0U;
 }
 
 static void update_pending_yaw_reference(void) {
@@ -129,19 +138,45 @@ static void update_pending_yaw_reference(void) {
         return;
     }
 
-    int16_t abs_gz = (imu_gz_cdps < 0) ? (int16_t)(-imu_gz_cdps) : imu_gz_cdps;
+    /*
+     * Important: after a turn, do NOT capture the new straight reference immediately.
+     * First let the direction-specific release below cancel the remaining turn arc.
+     * Otherwise the robot may capture a still-rotating heading and keep curving.
+     */
+    if (turn_to_forward_settle_count > 0U) {
+        return;
+    }
+
     if (yaw_ref_capture_delay_count > 0U) {
         yaw_ref_capture_delay_count--;
         return;
     }
 
-    if (abs_gz > (int16_t)TURN_TO_FORWARD_GZ_STABLE_CDPS && turn_to_forward_settle_count > 0U) {
-        return;
+#if TURN_TO_FORWARD_CAPTURE_STABLE_CYCLES > 0U
+    /*
+     * Wait until the yaw rate is small before capturing the new straight heading.
+     * If we capture while the chassis is still rotating, the robot will keep the old turn arc.
+     * A timeout prevents the robot from waiting forever if the gyro is noisy.
+     */
+    if (abs_i16(imu_gz_cdps) <= (int16_t)TURN_TO_FORWARD_GZ_STABLE_CDPS) {
+        if (yaw_ref_capture_stable_count < TURN_TO_FORWARD_CAPTURE_STABLE_CYCLES) {
+            yaw_ref_capture_stable_count++;
+            return;
+        }
+    } else {
+        yaw_ref_capture_stable_count = 0U;
+        if (yaw_ref_capture_timeout_count > 0U) {
+            yaw_ref_capture_timeout_count--;
+            return;
+        }
     }
+#endif
 
     capture_yaw_reference_now();
     yaw_ref_capture_pending = 0U;
     yaw_ref_capture_delay_count = 0U;
+    yaw_ref_capture_stable_count = 0U;
+    yaw_ref_capture_timeout_count = 0U;
     yaw_corr_last = 0;
     PID_Reset(&pid_yaw);
 }
@@ -163,12 +198,18 @@ static void set_motion_mode(MotorMode_t mode, uint8_t left_dir, uint8_t right_di
             yaw_startup_block = YAW_STARTUP_BLOCK_CYCLES;
             forward_start_bias_count = FORWARD_START_BIAS_CYCLES;
 #if TURN_TO_FORWARD_SETTLE_ENABLE
-            if (is_turn_mode(previous_mode) != 0U) {
-                turn_to_forward_settle_count = TURN_TO_FORWARD_SETTLE_CYCLES;
+            if (previous_mode == MOTOR_MODE_LEFT) {
+                turn_to_forward_from = MOTOR_MODE_LEFT;
+                turn_to_forward_settle_count = TURN_LEFT_TO_FORWARD_SETTLE_CYCLES;
+            } else if (previous_mode == MOTOR_MODE_RIGHT) {
+                turn_to_forward_from = MOTOR_MODE_RIGHT;
+                turn_to_forward_settle_count = TURN_RIGHT_TO_FORWARD_SETTLE_CYCLES;
             } else {
+                turn_to_forward_from = MOTOR_MODE_STOP;
                 turn_to_forward_settle_count = 0U;
             }
 #else
+            turn_to_forward_from = MOTOR_MODE_STOP;
             turn_to_forward_settle_count = 0U;
 #endif
             yaw_corr_last = 0;
@@ -176,8 +217,11 @@ static void set_motion_mode(MotorMode_t mode, uint8_t left_dir, uint8_t right_di
             yaw_startup_block = 0U;
             forward_start_bias_count = 0U;
             turn_to_forward_settle_count = 0U;
+            turn_to_forward_from = MOTOR_MODE_STOP;
             yaw_ref_capture_pending = 0U;
             yaw_ref_capture_delay_count = 0U;
+            yaw_ref_capture_stable_count = 0U;
+            yaw_ref_capture_timeout_count = 0U;
             yaw_corr_last = 0;
         }
     }
@@ -201,8 +245,11 @@ void motor_init(void) {
     yaw_ref_cdeg = (int16_t)YAW_FIXED_REF_CDEG;
 #endif
     turn_to_forward_settle_count = 0U;
+    turn_to_forward_from = MOTOR_MODE_STOP;
     yaw_ref_capture_pending = 0U;
     yaw_ref_capture_delay_count = 0U;
+    yaw_ref_capture_stable_count = 0U;
+    yaw_ref_capture_timeout_count = 0U;
     yaw_corr_last = 0;
 }
 
@@ -239,6 +286,10 @@ static int16_t clamp_i16(int16_t val, int16_t min_val, int16_t max_val) {
     if (val < min_val) return min_val;
     if (val > max_val) return max_val;
     return val;
+}
+
+static int16_t abs_i16(int16_t val) {
+    return (val < 0) ? (int16_t)(-val) : val;
 }
 
 static uint16_t add_signed_to_speed(uint16_t base, int16_t delta) {
@@ -382,9 +433,35 @@ static int16_t compute_accel_slope_correction(void) {
 static void apply_turn_to_forward_balance(void) {
 #if TURN_TO_FORWARD_SETTLE_ENABLE
     if (turn_to_forward_settle_count == 0U) {
+        turn_to_forward_from = MOTOR_MODE_STOP;
         return;
     }
 
+    /*
+     * Direction-specific release when changing from turn to forward.
+     * LEFT -> FORWARD was the problematic case: the robot kept the left-turn arc.
+     * So we briefly speed up the left wheel and release/slow the right wheel.
+     */
+    if (turn_to_forward_from == MOTOR_MODE_LEFT) {
+#if TURN_LEFT_TO_FORWARD_HARD_RELEASE_CYCLES > 0U
+        if (turn_to_forward_settle_count > (TURN_LEFT_TO_FORWARD_SETTLE_CYCLES - TURN_LEFT_TO_FORWARD_HARD_RELEASE_CYCLES)) {
+            target_L = TURN_LEFT_TO_FORWARD_HARD_L_TARGET;
+            target_R = TURN_LEFT_TO_FORWARD_HARD_R_TARGET;
+            return;
+        }
+#endif
+        target_L = add_signed_to_speed(target_L, (int16_t)TURN_LEFT_TO_FORWARD_CATCHUP_CORR);
+        target_R = add_signed_to_speed(target_R, (int16_t)(-TURN_LEFT_TO_FORWARD_SLOWDOWN_CORR));
+        return;
+    }
+
+    if (turn_to_forward_from == MOTOR_MODE_RIGHT) {
+        target_R = add_signed_to_speed(target_R, (int16_t)TURN_RIGHT_TO_FORWARD_CATCHUP_CORR);
+        target_L = add_signed_to_speed(target_L, (int16_t)(-TURN_RIGHT_TO_FORWARD_SLOWDOWN_CORR));
+        return;
+    }
+
+    // Fallback wheel-speed balance.
     if (current_L + TURN_TO_FORWARD_BALANCE_MARGIN < current_R) {
         target_L = add_signed_to_speed(target_L, (int16_t)TURN_TO_FORWARD_CATCHUP_CORR);
         target_R = add_signed_to_speed(target_R, (int16_t)(-TURN_TO_FORWARD_SLOWDOWN_CORR));
@@ -545,22 +622,31 @@ void move_backward(uint16_t speed) {
 
 // Turning left:
 void turn_left(uint16_t speed) {
+#if TURN_LEFT_USE_REVERSE_INNER
+    // Left motor reverses slightly, right motor moves forward.
+    // This makes LEFT turn stronger because the uploaded test showed LEFT is weaker than RIGHT.
+    set_motion_mode(MOTOR_MODE_LEFT, 1U, 0U);
+#else
     set_motion_mode(MOTOR_MODE_LEFT, 0U, 0U);
+#endif
     speed = clamp_speed(speed);
-//    base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_LEFT_INNER_PERCENT), SETPOINT_TRIM_L_PERCENT);
+    base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_LEFT_INNER_PERCENT), SETPOINT_TRIM_L_PERCENT);
     base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_LEFT_OUTER_PERCENT), SETPOINT_TRIM_R_PERCENT);
-    base_target_L = 0;
     target_L = base_target_L;
     target_R = base_target_R;
 }
 
 // Turning right:
 void turn_right(uint16_t speed) {
+#if TURN_RIGHT_USE_REVERSE_INNER
+    set_motion_mode(MOTOR_MODE_RIGHT, 0U, 1U);
+#else
+    // Keep the right wheel moving forward to soften RIGHT turn and avoid a hard pivot.
     set_motion_mode(MOTOR_MODE_RIGHT, 0U, 0U);
+#endif
     speed = clamp_speed(speed);
     base_target_L = scale_speed_percent(scale_speed_percent(speed, TURN_RIGHT_OUTER_PERCENT), SETPOINT_TRIM_L_PERCENT);
-//    base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_RIGHT_INNER_PERCENT), SETPOINT_TRIM_R_PERCENT);
-    base_target_R = 0;
+    base_target_R = scale_speed_percent(scale_speed_percent(speed, TURN_RIGHT_INNER_PERCENT), SETPOINT_TRIM_R_PERCENT);
     target_L = base_target_L;
     target_R = base_target_R;
 }
@@ -578,8 +664,11 @@ void stop_robot(void) {
     yaw_startup_block = 0U;
     forward_start_bias_count = 0U;
     turn_to_forward_settle_count = 0U;
+    turn_to_forward_from = MOTOR_MODE_STOP;
     yaw_ref_capture_pending = 0U;
     yaw_ref_capture_delay_count = 0U;
+    yaw_ref_capture_stable_count = 0U;
+    yaw_ref_capture_timeout_count = 0U;
     yaw_corr_last = 0;
     base_target_L = 0U;
     base_target_R = 0U;
