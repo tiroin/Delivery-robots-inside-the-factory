@@ -18,6 +18,7 @@
 #define CAN_ID_CONTROL    0x111
 #define CAN_ID_STATUS     0x222
 #define CAN_ID_ANGLE      0x050
+#define CAN_ID_PI_CMD     0x120
 
 #define CMD_STOP        0x00
 #define CMD_FORWARD     0x01
@@ -33,6 +34,7 @@
 #define CAN_TIMEOUT_MS         1500UL
 #define GYRO_UPDATE_PERIOD_MS  50UL
 #define ANGLE_TX_PERIOD_MS     50UL
+#define PI_CMD_TIMEOUT_MS       700UL
 
 #define MPU6050_ADDR            0x68
 #define MPU6050_RA_PWR_MGMT_1   0x6B
@@ -70,6 +72,9 @@ static uint32_t angle_tx_fail_count = 0UL;
 static uint8_t angle_seq = 0U;
 static uint32_t rx_status_count = 0UL;
 static uint32_t rx_other_count = 0UL;
+static uint32_t rx_pi_cmd_count = 0UL;
+static unsigned long last_pi_cmd_ms = 0UL;
+static bool pi_control_active = false;
 
 static uint32_t twai_state_dbg = 0UL;
 static uint32_t tx_err_dbg = 0UL;
@@ -183,6 +188,12 @@ static void send_angle_if_due(void) {
 
 static void send_current_command_if_due(void) {
     unsigned long now = millis();
+
+    // When Raspberry Pi is the master, stop safely if Pi command stream disappears.
+    if (pi_control_active && (now - last_pi_cmd_ms > PI_CMD_TIMEOUT_MS)) {
+        set_command(CMD_STOP, 0U, 0U);
+    }
+
     if (now - last_cmd_tx_ms >= CMD_REFRESH_PERIOD_MS) {
         send_cmd(current_cmd, current_spd_l, current_spd_r);
         last_cmd_tx_ms = now;
@@ -198,6 +209,22 @@ static void receive_feedback(void) {
             emergency_flag = rx_msg.data[4];
             last_status_ms = millis();
             rx_status_count++;
+        } else if (rx_msg.identifier == CAN_ID_PI_CMD && rx_msg.data_length_code >= 5) {
+            uint8_t cmd = rx_msg.data[0];
+            uint16_t spd_l = ((uint16_t)rx_msg.data[1] << 8) | rx_msg.data[2];
+            uint16_t spd_r = ((uint16_t)rx_msg.data[3] << 8) | rx_msg.data[4];
+
+            if (cmd == CMD_STOP || cmd == CMD_FORWARD || cmd == CMD_BACKWARD ||
+                cmd == CMD_TURN_LEFT || cmd == CMD_TURN_RIGHT) {
+                set_command(cmd, spd_l, spd_r);
+                pi_control_active = true;
+                last_pi_cmd_ms = millis();
+                rx_pi_cmd_count++;
+
+                // Forward immediately to S32K on ID 0x111. The periodic refresh below keeps it alive.
+                send_cmd(current_cmd, current_spd_l, current_spd_r);
+                last_cmd_tx_ms = millis();
+            }
         } else {
             rx_other_count++;
         }
@@ -359,14 +386,14 @@ body{font-family:monospace;background:#101010;color:#00ff88;margin:0;padding:18p
 <div><button onclick="send('forward')">FORWARD</button></div>
 <div><button onclick="send('left')">LEFT</button><button class="stop" onclick="send('stop')">STOP</button><button onclick="send('right')">RIGHT</button></div>
 <div><button onclick="send('backward')">BACKWARD</button></div>
-<div class="box" id="canbox"><h3>// CAN</h3><div class="row"><span>STATUS</span><span id="ok" class="v">--</span></div><div class="row"><span>AGE</span><span id="age" class="v">--</span></div><div class="row"><span>TWAI</span><span id="twai" class="v">--</span></div><div class="row"><span>TX/RX ERR</span><span id="err" class="v">--</span></div><div class="row"><span>BUS ERR</span><span id="bus" class="v">--</span></div><div class="row"><span>RX STATUS</span><span id="rxs" class="v">--</span></div><div class="row"><span>RX OTHER</span><span id="rxo" class="v">--</span></div><div class="row"><span>TX OK/FAIL</span><span id="txc" class="v">--</span></div></div>
+<div class="box" id="canbox"><h3>// CAN</h3><div class="row"><span>STATUS</span><span id="ok" class="v">--</span></div><div class="row"><span>AGE</span><span id="age" class="v">--</span></div><div class="row"><span>TWAI</span><span id="twai" class="v">--</span></div><div class="row"><span>TX/RX ERR</span><span id="err" class="v">--</span></div><div class="row"><span>BUS ERR</span><span id="bus" class="v">--</span></div><div class="row"><span>RX STATUS</span><span id="rxs" class="v">--</span></div><div class="row"><span>RX OTHER</span><span id="rxo" class="v">--</span></div><div class="row"><span>RX PI 0x120</span><span id="rxpi" class="v">--</span></div><div class="row"><span>TX OK/FAIL</span><span id="txc" class="v">--</span></div></div>
 <div class="box"><h3>// MOTOR</h3><div class="row"><span>CMD</span><span id="cmd" class="v">--</span></div><div class="row"><span>SET L/R</span><span id="set" class="v">--</span></div><div class="row"><span>FB L/R</span><span id="fb" class="v">--</span></div><div class="row"><span>EMG</span><span id="emg" class="v">--</span></div></div>
 <div class="box" id="emgbox"><h3>// EMERGENCY MONITOR</h3><div class="row"><span>STATE</span><span id="emgstate" class="v">--</span></div><div class="row"><span>SOURCE</span><span id="emgsrc" class="v">STM32 0x001</span></div><div class="row"><span>ACTION</span><span id="emgaction" class="v">--</span></div><div class="row"><span>STATUS BYTE</span><span id="emgbyte" class="v">--</span></div></div>
 <div class="box" id="gyrobox"><h3>// GYRO LOCAL</h3><div class="row"><span>MPU</span><span id="mpu" class="v">--</span></div><div class="row"><span>GX</span><span id="gx" class="v">--</span></div><div class="row"><span>GY</span><span id="gy" class="v">--</span></div><div class="row"><span>GZ</span><span id="gz" class="v">--</span></div><div class="row"><span>YAW</span><span id="yaw" class="v">--</span></div><button onclick="fetch('/zero_gyro')">ZERO YAW</button></div>
 <div class="box"><h3>// ANGLE CAN</h3><div class="row"><span>ID</span><span class="v">0x050</span></div><div class="row"><span>PERIOD</span><span id="angp" class="v">--</span></div><div class="row"><span>TX OK/FAIL</span><span id="angtx" class="v">--</span></div><div class="row"><span>SEQ</span><span id="angseq" class="v">--</span></div></div>
 <script>
 function send(c){const s=document.getElementById('spd').value;fetch('/cmd?c='+c+'&s='+s)}
-setInterval(()=>{fetch('/status').then(r=>r.json()).then(d=>{ok.textContent=d.ok?'OK':'TIMEOUT';age.textContent=d.age+' ms';twai.textContent=d.twai;err.textContent=d.txerr+'/'+d.rxerr;bus.textContent=d.buserr;rxs.textContent=d.rxs;rxo.textContent=d.rxo;txc.textContent=d.txok+'/'+d.txfail;cmd.textContent=d.cmd;set.textContent=d.sl+'/'+d.sr;fb.textContent=d.fl+'/'+d.fr;emg.textContent=d.emg;let e=(d.emg!=0);emgstate.textContent=e?'ACTIVE':'CLEAR';emgstate.className=e?'v red':'v green';emgaction.textContent=e?'STOP MOTOR':'ALLOW RUN';emgaction.className=e?'v red':'v green';emgbyte.textContent=d.emg;mpu.textContent=d.mpu?'OK':'ERR';gx.textContent=d.gx+' dps';gy.textContent=d.gy+' dps';gz.textContent=d.gz+' dps';yaw.textContent=d.yaw+' deg';angp.textContent=d.angleperiod+' ms';angtx.textContent=d.angleok+'/'+d.anglefail;angseq.textContent=d.angleseq;canbox.className=d.ok?'box':'box bad';emgbox.className=e?'box emg':'box';gyrobox.className=d.mpu?'box':'box bad';});},300);
+setInterval(()=>{fetch('/status').then(r=>r.json()).then(d=>{ok.textContent=d.ok?'OK':'TIMEOUT';age.textContent=d.age+' ms';twai.textContent=d.twai;err.textContent=d.txerr+'/'+d.rxerr;bus.textContent=d.buserr;rxs.textContent=d.rxs;rxo.textContent=d.rxo;rxpi.textContent=d.rxpi;txc.textContent=d.txok+'/'+d.txfail;cmd.textContent=d.cmd;set.textContent=d.sl+'/'+d.sr;fb.textContent=d.fl+'/'+d.fr;emg.textContent=d.emg;let e=(d.emg!=0);emgstate.textContent=e?'ACTIVE':'CLEAR';emgstate.className=e?'v red':'v green';emgaction.textContent=e?'STOP MOTOR':'ALLOW RUN';emgaction.className=e?'v red':'v green';emgbyte.textContent=d.emg;mpu.textContent=d.mpu?'OK':'ERR';gx.textContent=d.gx+' dps';gy.textContent=d.gy+' dps';gz.textContent=d.gz+' dps';yaw.textContent=d.yaw+' deg';angp.textContent=d.angleperiod+' ms';angtx.textContent=d.angleok+'/'+d.anglefail;angseq.textContent=d.angleseq;canbox.className=d.ok?'box':'box bad';emgbox.className=e?'box emg':'box';gyrobox.className=d.mpu?'box':'box bad';});},300);
 </script></body></html>
 )rawliteral";
 
@@ -384,6 +411,9 @@ static void handle_cmd(void) {
     else if (c == "left") cmd = CMD_TURN_LEFT;
     else if (c == "right") cmd = CMD_TURN_RIGHT;
     else cmd = CMD_STOP;
+
+    // Manual web command takes over from Raspberry Pi until Pi sends a new 0x120 frame.
+    pi_control_active = false;
 
     if (cmd == CMD_STOP) {
         set_command(CMD_STOP, 0U, 0U);
@@ -415,6 +445,7 @@ static void handle_status(void) {
     json += ",\"buserr\":" + String(bus_err_dbg);
     json += ",\"rxs\":" + String(rx_status_count);
     json += ",\"rxo\":" + String(rx_other_count);
+    json += ",\"rxpi\":" + String(rx_pi_cmd_count);
     json += ",\"txok\":" + String(tx_ok_count);
     json += ",\"txfail\":" + String(tx_fail_count);
     json += ",\"cmd\":\"" + String(cmd_name(current_cmd)) + "\"";
@@ -461,7 +492,7 @@ void setup() {
     display.setTextColor(SSD1306_WHITE);
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.print("CAN web control");
+    display.print("CAN ESP gateway");
     display.setCursor(0, 12);
     display.print("Gyro CAN angle");
     display.display();
